@@ -7,6 +7,9 @@
 !/schema.json
 !/questions.json
 !/vercel.json
+!/downloads
+/downloads/*
+!/downloads/*.xlsx
 !/img
 /img/*
 !/img/logo-mark.png
