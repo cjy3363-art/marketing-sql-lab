@@ -245,26 +245,63 @@ function renderPills() {
 }
 
 const AI_OFF = "AI 질문 변환 기능은 현재 비활성화되어 있습니다. 준비한 질문 또는 직접 SQL 입력 기능을 이용해 주세요.";
+// ── AI 모델 선택 ── 목록·기본값은 서버(GET api/sql)가 정한다. 서버가 없으면(정적 서버) 아래 기본 목록만 보여 준다
+const MODEL_KEY = "msl.aiModel";
+const MODELS_FALLBACK = { default: "gemini-3.8-flash", models: [
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", desc: "기본 · 빠른 SQL 생성, 속도와 정확도 균형", enabled: true },
+  { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", desc: "이전 세대 Flash · 안정 버전", enabled: true },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", desc: "가벼운 질문 · 가장 빠르고 저렴", enabled: true },
+] };
+const AI = { models: [], def: MODELS_FALLBACK.default };
+function store(k, v) { try { v === undefined ? (v = localStorage.getItem(k)) : localStorage.setItem(k, v); return v; } catch (e) { return null; } }
+function showModelDesc() {
+  const m = AI.models.find(x => x.id === $("#nl-model").value);
+  $("#nl-model-desc").textContent = m ? `${m.desc} · ${m.id}` : "";
+}
+function fillModels(list) {
+  AI.def = list.default;
+  AI.models = list.models.filter(m => m.enabled);
+  $("#nl-model").innerHTML = AI.models.map(m =>
+    `<option value="${esc(m.id)}">${esc(m.label)}${m.id === AI.def ? " (기본)" : ""}</option>`).join("");
+  const saved = store(MODEL_KEY);
+  // 저장된 모델이 더 이상 지원되지 않으면 기본 모델로 되돌린다
+  $("#nl-model").value = AI.models.some(m => m.id === saved) ? saved : AI.def;
+  showModelDesc();
+}
+async function loadModels() {
+  fillModels(MODELS_FALLBACK);
+  try {
+    const res = await fetch("api/sql", { headers: { Accept: "application/json" } });
+    const j = res.ok ? await res.json() : null;
+    if (j && Array.isArray(j.models) && j.models.some(m => m.enabled)) fillModels(j);
+  } catch (e) { /* 서버 함수 없음 → 기본 목록 유지 */ }
+}
+$("#nl-model").addEventListener("change", () => { store(MODEL_KEY, $("#nl-model").value); showModelDesc(); });
+loadModels();
+
 $("#btn-nl").addEventListener("click", async () => {
   const q = $("#nl").value.trim();
   if (!q) return;
   const b = $("#btn-nl"); b.disabled = true; b.textContent = "AI가 SQL을 쓰는 중…";
+  const model = $("#nl-model").value || AI.def;
+  const label = (AI.models.find(m => m.id === model) || { label: model }).label;
   let r;
   try {
     const res = await fetch("api/sql", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q, schema: S.schema }) });
+      body: JSON.stringify({ question: q, schema: S.schema, model }) });
     // 404·405·501 = 서버 함수가 없는 환경(정적 서버 등) → AI 기능 비활성으로 본다
+    // 400·413 = 서버가 거부 (허용되지 않은 모델 등) — 본문 JSON 의 reason 을 보여 준다
     r = res.ok ? await res.json()
       : [404, 405, 501].includes(res.status) ? { sql: null, disabled: true }
-      : { sql: null, reason: `서버 함수가 없습니다 (${res.status}) — 배포하면 생깁니다` };
+      : await res.json().catch(() => ({ sql: null, reason: `서버 오류 (${res.status})` }));
   } catch (e) { r = { sql: null, reason: "서버 함수에 닿지 못했습니다" }; }
   $("#nl-msg").hidden = false;
   if (r.sql) {
     $("#sql").value = r.sql;
-    $("#nl-msg").textContent = `AI가 쓴 SQL입니다 — ${r.why || ""} · 실행 전에 읽어 보고, 결과 하나는 손으로 검산하십시오.`;
+    $("#nl-msg").textContent = `AI(${label})가 쓴 SQL입니다 — ${r.why || ""} · 실행 전에 읽어 보고, 결과 하나는 손으로 검산하십시오.`;
   } else {
     $("#nl-msg").textContent = r.disabled ? AI_OFF
-      : `SQL을 만들지 못했습니다 — ${r.reason}. 아래 SQL을 직접 고쳐서 실행할 수 있습니다.`;
+      : `SQL을 만들지 못했습니다 — ${String(r.reason || "").replace(/\.\s*$/, "")}. 아래 SQL을 직접 고쳐서 실행할 수 있습니다.`;
   }
   b.disabled = false; b.textContent = "SQL 만들기 (AI)";
 });

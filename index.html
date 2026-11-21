@@ -113,7 +113,12 @@
       <div class="pills" id="schema-pills" aria-label="표 이름"></div>
       <label class="label" for="nl">문장으로 묻기</label>
       <textarea id="nl" rows="2" placeholder="예) 병원별 6개월 광고비 합계는?"></textarea>
-      <div class="row"><button id="btn-nl" class="ghost">SQL 만들기 (AI)</button></div>
+      <div class="row ai-row">
+        <label class="model-pick" for="nl-model"><span>AI 모델</span>
+          <select id="nl-model" aria-describedby="nl-model-desc"></select></label>
+        <button id="btn-nl" class="ghost">SQL 만들기 (AI)</button>
+      </div>
+      <p id="nl-model-desc" class="model-desc"></p>
       <p id="nl-msg" class="note" hidden></p>
     </div>
     <div class="console">
