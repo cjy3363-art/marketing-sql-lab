@@ -364,6 +364,10 @@ td.sb-hit { background: var(--primary-soft); font-weight: 700; }
   .model-pick { min-height: 40px; }
   .model-pick select { flex: 1; max-width: none; min-height: 38px; }
   .sb-list { grid-template-columns: 1fr; }
+  #tab-scrap .section-head { flex-wrap: wrap; }
+  #tab-scrap .section-head > div:first-child { flex: 1 1 100%; }
+  .sb-backup { flex: 1 1 100%; justify-content: flex-end; flex-wrap: nowrap; }
+  .sb-backup .btn-icon { white-space: nowrap; }
   .sb-grid2 { grid-template-columns: 1fr; }
   .sb-actions .btn-icon, .sb-backup .btn-icon { min-height: 36px; }
   .sb-tools input[type="search"] { flex-basis: 100%; }
