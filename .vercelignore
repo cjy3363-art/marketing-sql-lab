@@ -7,6 +7,10 @@
 !/schema.json
 !/questions.json
 !/vercel.json
+!/img
+/img/*
+!/img/logo-mark.png
+!/img/favicon.png
 !/lib
 /lib/*
 !/lib/xlsx.full.min.js

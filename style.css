@@ -46,6 +46,7 @@ h3 { font-size: 15px; line-height: 20px; color: var(--ink); margin: 0; font-weig
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-mark { width: 32px; height: 32px; border-radius: var(--r); background: var(--primary-btn); color: #fff;
   display: grid; place-items: center; font: 700 11px/1 var(--mono); letter-spacing: .02em; flex: none; }
+img.brand-mark { display: block; background: none; object-fit: contain; }
 .brand-text { min-width: 0; }
 .brand-name { font-size: 17px; font-weight: 600; color: var(--ink); line-height: 22px; white-space: nowrap; }
 .ver { font: 500 11px/1 var(--mono); color: var(--body); background: var(--s-mid); padding: 3px 6px;
