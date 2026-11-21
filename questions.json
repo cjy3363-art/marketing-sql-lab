@@ -1,0 +1,449 @@
+{
+  "title": "준비해 둔 질문",
+  "owner": "질문과 SQL은 사람이 골랐습니다. «확인할 값»은 실제 실행 결과이며, 실행 후 ✓/✕ 로 함께 표시되는 검산용 값입니다. (병의원 마케팅 합성 데이터)",
+  "files": [
+    {
+      "match": "hospitals",
+      "table": "hospitals"
+    },
+    {
+      "match": "campaigns",
+      "table": "campaigns"
+    },
+    {
+      "match": "marketing_daily",
+      "table": "marketing_daily"
+    },
+    {
+      "match": "inquiries",
+      "table": "inquiries"
+    },
+    {
+      "match": "reservations",
+      "table": "reservations"
+    },
+    {
+      "match": "payments",
+      "table": "payments"
+    }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "no": "Q1",
+      "stage": "현황",
+      "title": "병원별 6개월 성과",
+      "q": "[현황] Q1. 2025년 1~6월 병원별 광고비·문의·예약·내원·결제 건수·귀속 매출은?",
+      "description": "12개 병원의 기본 성과 규모를 한 표로 본다.",
+      "tables": [
+        "hospitals",
+        "campaigns",
+        "marketing_daily"
+      ],
+      "unit": "병원 1곳 (금액·이벤트 수 합계)",
+      "denominator": "없음 (합계만)",
+      "expected_rows": 12,
+      "sql": "WITH perf AS (\n  SELECT c.hospital_id,\n         SUM(d.spend) AS spend, SUM(d.inquiries) AS inquiries, SUM(d.reservations) AS reservations,\n         SUM(d.visits) AS visits, SUM(d.conversions) AS conversions, SUM(d.attributed_revenue) AS revenue\n  FROM marketing_daily d\n  JOIN campaigns c ON c.campaign_id = d.campaign_id\n  WHERE d.report_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n  GROUP BY c.hospital_id\n)\nSELECT h.hospital_id AS 병원ID,\n       h.hospital_name AS 병원명,\n       COALESCE(p.spend, 0)        AS 광고비,\n       COALESCE(p.inquiries, 0)    AS 문의,\n       COALESCE(p.reservations, 0) AS 예약,\n       COALESCE(p.visits, 0)       AS 내원,\n       COALESCE(p.conversions, 0)  AS 결제건수,\n       COALESCE(p.revenue, 0)      AS 귀속매출\nFROM hospitals h\nLEFT JOIN perf p ON p.hospital_id = h.hospital_id\nORDER BY h.hospital_id",
+      "judge": "한 줄 = 병원 1곳 · 세는 단위는 이벤트 수(고유 환자 아님) · marketing_daily를 병원별로 먼저 집계한 뒤 hospitals에 LEFT JOIN하므로 캠페인이 없는 H012도 0으로 남습니다 · 광고비는 매체 집행비만 포함합니다(H009는 유료 매체 미집행으로 0).",
+      "check": [
+        {
+          "where": {
+            "병원ID": "H001"
+          },
+          "col": "광고비",
+          "want": 109310850
+        },
+        {
+          "where": {
+            "병원ID": "H004"
+          },
+          "col": "귀속매출",
+          "want": 248190000
+        },
+        {
+          "where": {
+            "병원ID": "H012"
+          },
+          "col": "문의",
+          "want": 0
+        }
+      ]
+    },
+    {
+      "id": "q2a",
+      "no": "Q2-A",
+      "stage": "현황",
+      "title": "월별 퍼널 — A. 기간 이벤트 비율",
+      "q": "[현황] Q2-A. 월별 퍼널 — 이벤트 발생월 기준 기간 이벤트 비율",
+      "description": "같은 달에 발생한 문의·예약·내원·결제 이벤트 수와 그 비율을 본다.",
+      "tables": [
+        "marketing_daily"
+      ],
+      "unit": "월 1개 (이벤트 수)",
+      "denominator": "같은 달의 문의(예약 비율)·예약(내원 비율)·내원(결제 비율) 이벤트 수",
+      "expected_rows": 6,
+      "sql": "SELECT strftime(report_date, '%Y-%m') AS 월,\n       SUM(inquiries)    AS 문의,\n       SUM(reservations) AS 예약,\n       SUM(visits)       AS 내원,\n       SUM(conversions)  AS 결제,\n       ROUND(SUM(reservations) * 100.0 / NULLIF(SUM(inquiries), 0), 1)    AS 예약_문의_이벤트비율,\n       ROUND(SUM(visits)       * 100.0 / NULLIF(SUM(reservations), 0), 1) AS 내원_예약_이벤트비율,\n       ROUND(SUM(conversions)  * 100.0 / NULLIF(SUM(visits), 0), 1)       AS 결제_내원_이벤트비율\nFROM marketing_daily\nWHERE report_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\nGROUP BY 1\nORDER BY 1",
+      "judge": "한 줄 = 월 1개 · 이 비율은 같은 달에 일어난 서로 다른 고객의 이벤트를 나눈 '기간 이벤트 비율'이며 코호트 전환율이 아닙니다(전월 문의가 당월 예약으로 넘어옵니다). 같은 고객을 끝까지 따라간 전환율은 Q2-B를 보세요.",
+      "check": [
+        {
+          "where": {
+            "월": "2025-01"
+          },
+          "col": "예약_문의_이벤트비율",
+          "want": 42.5
+        },
+        {
+          "where": {
+            "월": "2025-06"
+          },
+          "col": "결제",
+          "want": 600
+        }
+      ]
+    },
+    {
+      "id": "q2b",
+      "no": "Q2-B",
+      "stage": "현황",
+      "title": "월별 퍼널 — B. 문의월 코호트 전환율",
+      "q": "[현황] Q2-B. 월별 퍼널 — 문의월 기준 코호트 전환율",
+      "description": "각 달에 들어온 문의가 이후 예약·내원·결제로 얼마나 이어졌는지 문의 ID로 추적한다.",
+      "tables": [
+        "inquiries",
+        "reservations",
+        "payments"
+      ],
+      "unit": "문의월 1개 (문의 이벤트 단위)",
+      "denominator": "해당 월 문의 / 예약된 문의 / 내원한 문의",
+      "expected_rows": 6,
+      "sql": "WITH inq AS (\n  SELECT inquiry_id, strftime(inquiry_date, '%Y-%m') AS cohort_month\n  FROM inquiries\n),\nres AS (   -- 문의 1건은 예약 최대 1건 (검증 완료) → 문의 단위 유지\n  SELECT inquiry_id, reservation_id, actual_visit_date\n  FROM reservations\n  WHERE inquiry_id IS NOT NULL\n),\npay AS (   -- 추가결제로 한 문의에 결제가 여러 건일 수 있어 문의 단위로 먼저 줄인다\n  SELECT DISTINCT inquiry_id\n  FROM payments\n  WHERE inquiry_id IS NOT NULL\n)\nSELECT i.cohort_month AS 문의월,\n       COUNT(*)                       AS 문의,\n       COUNT(r.reservation_id)        AS 예약된_문의,\n       COUNT(r.actual_visit_date)     AS 내원한_문의,\n       COUNT(p.inquiry_id)            AS 결제한_문의,\n       ROUND(COUNT(r.reservation_id)    * 100.0 / COUNT(*), 1)                             AS 문의_예약_전환율,\n       ROUND(COUNT(r.actual_visit_date) * 100.0 / NULLIF(COUNT(r.reservation_id), 0), 1)   AS 예약_내원_전환율,\n       ROUND(COUNT(p.inquiry_id)        * 100.0 / NULLIF(COUNT(r.actual_visit_date), 0), 1) AS 내원_결제_전환율,\n       ROUND(COUNT(p.inquiry_id)        * 100.0 / COUNT(*), 1)                             AS 문의_결제_전환율\nFROM inq i\nLEFT JOIN res r ON r.inquiry_id = i.inquiry_id\nLEFT JOIN pay p ON p.inquiry_id = i.inquiry_id\nGROUP BY 1\nORDER BY 1",
+      "judge": "한 줄 = 문의월 1개 · 분자·분모 모두 '문의 1건' 단위입니다(결제는 문의별로 한 번만 셉니다) · 문의에 연결되지 않은 직접예약 192건·직접결제 79건은 추적할 문의가 없어 제외됩니다 · 6월 코호트는 관측 기간이 짧아 후속 전환이 덜 잡힙니다 · 상세 데이터의 고객 ID·이벤트 연결·상태·응답 시간·건별 결제 금액은 합성 가정입니다.",
+      "check": [
+        {
+          "where": {
+            "문의월": "2025-01"
+          },
+          "col": "문의_예약_전환율",
+          "want": 43.1
+        },
+        {
+          "where": {
+            "문의월": "2025-06"
+          },
+          "col": "결제한_문의",
+          "want": 421
+        }
+      ]
+    },
+    {
+      "id": "q3",
+      "no": "Q3",
+      "stage": "현황",
+      "title": "병원·시술별 결제",
+      "q": "[현황] Q3. 병원별 시술에 따른 결제 건수·총매출·결제 객단가는?",
+      "description": "병원별 매출을 만드는 시술과 객단가 수준을 본다. 결제가 없는 병원은 '결제 없음' 1행으로 표시한다.",
+      "tables": [
+        "payments",
+        "hospitals"
+      ],
+      "unit": "병원 × 결제 시술 (결제 없는 병원은 '결제 없음' 1행)",
+      "denominator": "객단가 = 총매출 ÷ 결제 건수",
+      "expected_rows": 23,
+      "sql": "WITH pay AS (\n  SELECT p.hospital_id AS 병원ID,\n         h.hospital_type AS 진료유형,\n         p.treatment AS 시술,\n         COUNT(*) AS 결제건수,\n         SUM(p.payment_amount) AS 총매출,\n         ROUND(SUM(p.payment_amount) * 1.0 / COUNT(*), 0) AS 결제객단가\n  FROM payments p\n  JOIN hospitals h ON h.hospital_id = p.hospital_id\n  WHERE p.payment_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n  GROUP BY p.hospital_id, h.hospital_type, p.treatment\n),\nno_pay AS (   -- 기간 내 결제가 없는 병원: 시술 행을 만들지 않고 '결제 없음' 표시 1행\n  SELECT h.hospital_id AS 병원ID,\n         h.hospital_type AS 진료유형,\n         '결제 없음' AS 시술,\n         0 AS 결제건수,\n         0 AS 총매출,\n         CAST(NULL AS DOUBLE) AS 결제객단가\n  FROM hospitals h\n  WHERE NOT EXISTS (SELECT 1 FROM payments p\n                    WHERE p.hospital_id = h.hospital_id\n                      AND p.payment_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30')\n)\nSELECT * FROM (SELECT * FROM pay UNION ALL SELECT * FROM no_pay)\nORDER BY 병원ID, 총매출 DESC",
+      "judge": "한 줄 = 병원 × 시술 · 결제가 없는 H012는 시술 행을 만들지 않고 '결제 없음' 1행(건수·매출 0, 객단가 NULL)으로 표시합니다 · 병원별 건수·매출 합계는 원본 집계와 같지만, 시술 배정과 건별 결제 금액은 합성 배분이라 시술별 객단가는 배분 결과입니다.",
+      "check": [
+        {
+          "where": {
+            "병원ID": "H001",
+            "시술": "실리프팅"
+          },
+          "col": "결제건수",
+          "want": 246
+        },
+        {
+          "where": {
+            "병원ID": "H011",
+            "시술": "안면윤곽"
+          },
+          "col": "총매출",
+          "want": 158781000
+        },
+        {
+          "where": {
+            "병원ID": "H012",
+            "시술": "결제 없음"
+          },
+          "col": "결제건수",
+          "want": 0
+        }
+      ]
+    },
+    {
+      "id": "q4",
+      "no": "Q4",
+      "stage": "비교",
+      "title": "유료 채널별 CPL·CPR·ROAS",
+      "q": "[비교] Q4. 유료광고 채널별 문의당 비용(CPL)·예약당 비용(CPR)·ROAS는?",
+      "description": "4개 유료 채널의 비용 효율을 비교한다.",
+      "tables": [
+        "marketing_daily",
+        "campaigns"
+      ],
+      "unit": "유료 채널 1개 + 합계 1행",
+      "denominator": "CPL=문의, CPR=예약, ROAS=유료 채널 광고비",
+      "expected_rows": 5,
+      "sql": "WITH ch AS (\n  SELECT c.channel, SUM(d.spend) AS spend, SUM(d.inquiries) AS inquiries,\n         SUM(d.reservations) AS reservations, SUM(d.attributed_revenue) AS revenue\n  FROM marketing_daily d\n  JOIN campaigns c ON c.campaign_id = d.campaign_id\n  WHERE c.channel_group = '유료광고'\n    AND d.report_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n  GROUP BY c.channel\n)\nSELECT COALESCE(channel, '유료광고 합계') AS 채널,\n       SUM(spend)        AS 광고비,\n       SUM(inquiries)    AS 문의,\n       SUM(reservations) AS 예약,\n       SUM(revenue)      AS 유료_귀속매출,\n       CASE WHEN SUM(spend) > 0 THEN ROUND(SUM(spend) * 1.0 / NULLIF(SUM(inquiries), 0), 0) END    AS CPL,\n       CASE WHEN SUM(spend) > 0 THEN ROUND(SUM(spend) * 1.0 / NULLIF(SUM(reservations), 0), 0) END AS CPR,\n       CASE WHEN SUM(spend) > 0 THEN ROUND(SUM(revenue) * 100.0 / SUM(spend), 2) END               AS ROAS\nFROM ch\nGROUP BY GROUPING SETS ((channel), ())\nORDER BY channel IS NULL, 광고비 DESC",
+      "judge": "한 줄 = 유료 채널 1개(+합계) · ROAS는 유료 채널 귀속 매출 ÷ 유료 채널 광고비 × 100(기본 지표)입니다. 비유료 채널 매출까지 넣은 통합 ROAS(전체 360.98%)는 참고값이라 이 표에 섞지 않았습니다 · 예약은 같은 기간의 이벤트 수이며 코호트가 아닙니다 · 광고비가 0이면 비용 지표는 산출 불가(NULL)입니다.",
+      "check": [
+        {
+          "where": {
+            "채널": "유료광고 합계"
+          },
+          "col": "ROAS",
+          "want": 197.8
+        },
+        {
+          "where": {
+            "채널": "네이버 검색광고"
+          },
+          "col": "CPL",
+          "want": 92938
+        }
+      ]
+    },
+    {
+      "id": "q5",
+      "no": "Q5",
+      "stage": "비교",
+      "title": "병원별 취소율·노쇼율",
+      "q": "[비교] Q5. 병원별 예약 취소율과 노쇼율은 얼마나 차이 나는가?",
+      "description": "예약 이후 이탈 수준을 병원별로 비교한다.",
+      "tables": [
+        "reservations",
+        "hospitals"
+      ],
+      "unit": "병원 1곳 (예약 이벤트)",
+      "denominator": "기본: 결과 확정 예약(내원완료+취소+노쇼) / 참고: 전체 예약",
+      "expected_rows": 12,
+      "sql": "WITH r AS (\n  SELECT hospital_id,\n         COUNT(*) AS reservations,\n         COUNT(*) FILTER (WHERE reservation_status = '내원완료') AS visited,\n         COUNT(*) FILTER (WHERE reservation_status = '취소')     AS cancelled,\n         COUNT(*) FILTER (WHERE reservation_status = '노쇼')     AS no_show,\n         COUNT(*) FILTER (WHERE reservation_status = '예약유지') AS unresolved\n  FROM reservations\n  WHERE reservation_created_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n  GROUP BY hospital_id\n)\nSELECT h.hospital_id AS 병원ID,\n       COALESCE(r.reservations, 0) AS 예약,\n       COALESCE(r.visited, 0)      AS 내원완료,\n       COALESCE(r.cancelled, 0)    AS 취소,\n       COALESCE(r.no_show, 0)      AS 노쇼,\n       COALESCE(r.unresolved, 0)   AS 결과미확인,\n       ROUND(r.cancelled * 100.0 / NULLIF(r.reservations - r.unresolved, 0), 1) AS 취소율_결과확정기준,\n       ROUND(r.no_show   * 100.0 / NULLIF(r.reservations - r.unresolved, 0), 1) AS 노쇼율_결과확정기준,\n       ROUND(r.cancelled * 100.0 / NULLIF(r.reservations, 0), 1) AS 취소율_전체예약기준,\n       ROUND(r.no_show   * 100.0 / NULLIF(r.reservations, 0), 1) AS 노쇼율_전체예약기준\nFROM hospitals h\nLEFT JOIN r ON r.hospital_id = h.hospital_id\nORDER BY h.hospital_id",
+      "judge": "한 줄 = 병원 1곳 · 기본 비율의 분모는 결과가 확정된 예약이며, 예정일이 귀속기간 이후라 결과를 모르는 '예약유지'는 제외합니다(전체 예약 기준 비율도 함께 표시) · 예약이 없는 H012는 0%가 아니라 NULL입니다 · 취소·노쇼 상태는 합성 가정입니다.",
+      "check": [
+        {
+          "where": {
+            "병원ID": "H008"
+          },
+          "col": "노쇼율_결과확정기준",
+          "want": 12.6
+        },
+        {
+          "where": {
+            "병원ID": "H004"
+          },
+          "col": "취소율_결과확정기준",
+          "want": 6.8
+        }
+      ]
+    },
+    {
+      "id": "q6",
+      "no": "Q6",
+      "stage": "비교",
+      "title": "문의 채널별 예약 전환율",
+      "q": "[비교] Q6. 전화·카카오톡·상담폼 문의의 예약 전환율은?",
+      "description": "문의 경로별로 예약에 연결된 비율을 비교한다.",
+      "tables": [
+        "inquiries",
+        "reservations"
+      ],
+      "unit": "문의 채널 1개 (문의 이벤트, 참고로 고유 고객)",
+      "denominator": "채널별 문의 수 (고객 기준은 채널별 고유 고객)",
+      "expected_rows": 3,
+      "sql": "SELECT i.inquiry_channel AS 문의채널,\n       COUNT(*) AS 문의,\n       COUNT(r.reservation_id) AS 예약된_문의,\n       ROUND(COUNT(r.reservation_id) * 100.0 / COUNT(*), 1) AS 문의_예약_전환율,\n       COUNT(DISTINCT i.customer_id) AS 고유고객,\n       COUNT(DISTINCT CASE WHEN r.reservation_id IS NOT NULL THEN i.customer_id END) AS 예약한_고유고객,\n       ROUND(COUNT(DISTINCT CASE WHEN r.reservation_id IS NOT NULL THEN i.customer_id END) * 100.0\n             / COUNT(DISTINCT i.customer_id), 1) AS 고객기준_예약전환율\nFROM inquiries i\nLEFT JOIN reservations r ON r.inquiry_id = i.inquiry_id\nWHERE i.inquiry_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\nGROUP BY i.inquiry_channel\nORDER BY 문의 DESC",
+      "judge": "한 줄 = 문의 채널 1개 · 기본은 문의 1건 단위 코호트 전환율이고, 고객 기준 열은 채널마다 따로 센 고유 고객입니다(여러 채널로 문의한 고객은 중복되므로 세 채널 합 ≠ 전체 고객) · 직접예약 192건은 분자에서 제외됩니다 · 상세 데이터의 고객 ID·이벤트 연결·상태·응답 시간·건별 결제 금액은 합성 가정입니다.",
+      "check": [
+        {
+          "where": {
+            "문의채널": "전화"
+          },
+          "col": "문의_예약_전환율",
+          "want": 44.2
+        },
+        {
+          "where": {
+            "문의채널": "카카오톡"
+          },
+          "col": "문의",
+          "want": 3632
+        }
+      ]
+    },
+    {
+      "id": "q7",
+      "no": "Q7",
+      "stage": "원인 탐색",
+      "title": "응답 시간 구간별 예약 전환율",
+      "q": "[원인 탐색] Q7. 상담 응답 시간이 짧은 문의와 긴 문의의 예약 전환율 차이는?",
+      "description": "응답 시간과 예약 전환 사이의 관찰된 연관성만 확인한다.",
+      "tables": [
+        "inquiries",
+        "reservations"
+      ],
+      "unit": "응답 시간 구간 (문의 이벤트)",
+      "denominator": "구간 내 문의 수",
+      "expected_rows": 5,
+      "sql": "WITH b AS (\n  SELECT i.inquiry_id,\n         CASE WHEN i.response_time_minutes IS NULL THEN '5) 응답없음(연결실패)'\n              WHEN i.response_time_minutes <= 5    THEN '1) 5분 이내'\n              WHEN i.response_time_minutes <= 30   THEN '2) 6~30분'\n              WHEN i.response_time_minutes <= 120  THEN '3) 31~120분'\n              ELSE '4) 120분 초과' END AS bucket,\n         r.reservation_id\n  FROM inquiries i\n  LEFT JOIN reservations r ON r.inquiry_id = i.inquiry_id\n  WHERE i.inquiry_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n)\nSELECT bucket AS 응답시간구간,\n       COUNT(*) AS 문의,\n       COUNT(reservation_id) AS 예약된_문의,\n       ROUND(COUNT(reservation_id) * 100.0 / COUNT(*), 1) AS 문의_예약_전환율\nFROM b\nGROUP BY bucket\nORDER BY bucket",
+      "judge": "관찰된 연관성일 뿐 인과관계가 아닙니다 · 응답 시간은 합성 값이며 생성 규칙상 예약 연결 여부를 정하는 데 쓰이지 않았습니다 · '응답없음'(연결실패)은 0분이 아닌 별도 구간이고, 연결실패 문의는 생성 규칙상 예약과 연결되지 않아 0%입니다 · 5분 이내 구간의 98%가 전화 문의라 채널 차이가 구간 차이로 보일 수 있습니다.",
+      "check": [
+        {
+          "where": {
+            "응답시간구간": "1) 5분 이내"
+          },
+          "col": "문의_예약_전환율",
+          "want": 52.3
+        },
+        {
+          "where": {
+            "응답시간구간": "5) 응답없음(연결실패)"
+          },
+          "col": "문의",
+          "want": 1238
+        }
+      ]
+    },
+    {
+      "id": "q8a",
+      "no": "Q8-A",
+      "stage": "원인 탐색",
+      "title": "재문의 vs 신규 문의 — A. 이벤트 기준",
+      "q": "[원인 탐색] Q8-A. 재문의와 신규 문의의 예약·결제 전환율 — 문의 이벤트 기준",
+      "description": "문의 유형(신규 문의/재문의)별로 문의 1건이 예약·결제로 이어진 비율을 본다.",
+      "tables": [
+        "inquiries",
+        "reservations",
+        "payments"
+      ],
+      "unit": "문의 유형 (문의 이벤트)",
+      "denominator": "유형별 문의 수 (예약→결제는 예약된 문의)",
+      "expected_rows": 2,
+      "sql": "WITH pay AS (SELECT DISTINCT inquiry_id FROM payments WHERE inquiry_id IS NOT NULL)\nSELECT i.inquiry_type AS 문의유형,\n       COUNT(*) AS 문의,\n       COUNT(r.reservation_id) AS 예약된_문의,\n       COUNT(p.inquiry_id) AS 결제한_문의,\n       ROUND(COUNT(r.reservation_id) * 100.0 / COUNT(*), 1) AS 문의_예약_전환율,\n       ROUND(COUNT(p.inquiry_id) * 100.0 / COUNT(*), 1) AS 문의_결제_전환율,\n       ROUND(COUNT(p.inquiry_id) * 100.0 / NULLIF(COUNT(r.reservation_id), 0), 1) AS 예약_결제_전환율\nFROM inquiries i\nLEFT JOIN reservations r ON r.inquiry_id = i.inquiry_id\nLEFT JOIN pay p ON p.inquiry_id = i.inquiry_id\nWHERE i.inquiry_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\nGROUP BY i.inquiry_type\nORDER BY i.inquiry_type",
+      "judge": "관찰된 연관성일 뿐 인과관계가 아닙니다 · 한 줄 = 문의 유형, 세는 단위는 문의 1건입니다(고유 고객 기준은 Q8-B) · 결제는 문의별로 한 번만 셉니다 · 재문의 여부와 고객 ID는 합성 가정(같은 병원 30일 안 재문의)입니다.",
+      "check": [
+        {
+          "where": {
+            "문의유형": "재문의"
+          },
+          "col": "문의",
+          "want": 1115
+        },
+        {
+          "where": {
+            "문의유형": "신규 문의"
+          },
+          "col": "문의_예약_전환율",
+          "want": 40.1
+        }
+      ]
+    },
+    {
+      "id": "q8b",
+      "no": "Q8-B",
+      "stage": "원인 탐색",
+      "title": "재문의 vs 신규 문의 — B. 고유 고객 기준",
+      "q": "[원인 탐색] Q8-B. 재문의와 신규 문의의 예약·결제 전환율 — 고유 고객 기준",
+      "description": "1회만 문의한 고객과 2회 이상 문의한 고객의 예약·결제 비율을 비교한다.",
+      "tables": [
+        "inquiries",
+        "reservations",
+        "payments"
+      ],
+      "unit": "고객 구분 (고유 고객)",
+      "denominator": "구분별 고유 고객 수",
+      "expected_rows": 2,
+      "sql": "WITH cust AS (   -- 고객 단위로 먼저 줄인다 (문의한 고객만 대상)\n  SELECT i.customer_id,\n         COUNT(*) AS n_inquiries,\n         MAX(CASE WHEN r.reservation_id IS NOT NULL THEN 1 ELSE 0 END) AS reserved,\n         MAX(CASE WHEN p.inquiry_id IS NOT NULL THEN 1 ELSE 0 END) AS paid\n  FROM inquiries i\n  LEFT JOIN reservations r ON r.inquiry_id = i.inquiry_id\n  LEFT JOIN (SELECT DISTINCT inquiry_id FROM payments WHERE inquiry_id IS NOT NULL) p ON p.inquiry_id = i.inquiry_id\n  WHERE i.inquiry_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\n  GROUP BY i.customer_id\n)\nSELECT CASE WHEN n_inquiries >= 2 THEN '재문의 고객(2회 이상 문의)' ELSE '단일 문의 고객(1회)' END AS 고객구분,\n       COUNT(*) AS 고객,\n       SUM(reserved) AS 예약한_고객,\n       SUM(paid) AS 결제한_고객,\n       ROUND(SUM(reserved) * 100.0 / COUNT(*), 1) AS 고객_예약_전환율,\n       ROUND(SUM(paid) * 100.0 / COUNT(*), 1) AS 고객_결제_전환율\nFROM cust\nGROUP BY 1\nORDER BY 1",
+      "judge": "관찰된 연관성일 뿐 인과관계가 아닙니다 · 한 줄 = 고객 구분, 세는 단위는 고유 고객입니다 · 문의를 여러 번 한 고객은 예약·결제로 이어질 기회도 많아 고객 기준 비율이 구조적으로 높아질 수 있습니다 · 문의 경로로 이어진 예약·결제만 셉니다 · 상세 데이터의 고객 ID·이벤트 연결·상태·응답 시간·건별 결제 금액은 합성 가정입니다.",
+      "check": [
+        {
+          "where": {
+            "고객구분": "재문의 고객(2회 이상 문의)"
+          },
+          "col": "고객",
+          "want": 944
+        },
+        {
+          "where": {
+            "고객구분": "단일 문의 고객(1회)"
+          },
+          "col": "고객_결제_전환율",
+          "want": 20.6
+        }
+      ]
+    },
+    {
+      "id": "q9",
+      "no": "Q9",
+      "stage": "처방",
+      "title": "응답 5분 이내 단축 효과 (관찰 지표만)",
+      "q": "[처방] Q9. 상담 응답 시간을 5분 이내로 단축하면 예약 전환율이 증가하는가? — 관찰 지표",
+      "description": "응답이 있었던 문의를 5분 이내/초과로 나눈 예약 전환율을 전체·채널별로 보여준다. 효과 검증이 아니다.",
+      "tables": [
+        "inquiries",
+        "reservations"
+      ],
+      "unit": "채널 × 응답 구분 (문의 이벤트)",
+      "denominator": "응답이 있었던 문의 수(연결실패 제외)",
+      "expected_rows": 7,
+      "sql": "SELECT COALESCE(i.inquiry_channel, '전체') AS 문의채널,\n       CASE WHEN i.response_time_minutes <= 5 THEN '5분 이내' ELSE '5분 초과' END AS 응답구분,\n       COUNT(*) AS 문의,\n       COUNT(r.reservation_id) AS 예약된_문의,\n       ROUND(COUNT(r.reservation_id) * 100.0 / COUNT(*), 1) AS 문의_예약_전환율\nFROM inquiries i\nLEFT JOIN reservations r ON r.inquiry_id = i.inquiry_id\nWHERE i.response_time_minutes IS NOT NULL\n  AND i.inquiry_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\nGROUP BY GROUPING SETS ((응답구분), (i.inquiry_channel, 응답구분))\nORDER BY i.inquiry_channel NULLS FIRST, 응답구분",
+      "judge": "현재 데이터로는 해당 조치의 인과적 효과를 검증할 수 없습니다. 이 표는 응답 시간을 바꾼 결과가 아니라 서로 다른 문의를 비교한 관찰값입니다 · 5분 이내 문의는 대부분 전화라 채널 차이가 섞여 있고, 채널별로 나누면 전체와 다른 방향이 나타납니다 · 응답 시간은 합성 값이며 생성 규칙상 예약 연결에 쓰이지 않았습니다 · 효과를 확인하려면 응답 정책 적용 여부·시각 기록과 무작위 배정(A/B) 또는 단계적 도입 비교가 필요합니다.",
+      "check": [
+        {
+          "where": {
+            "문의채널": "전체",
+            "응답구분": "5분 이내"
+          },
+          "col": "문의",
+          "want": 3231
+        },
+        {
+          "where": {
+            "문의채널": "전화",
+            "응답구분": "5분 초과"
+          },
+          "col": "문의_예약_전환율",
+          "want": 58.8
+        }
+      ]
+    },
+    {
+      "id": "q10",
+      "no": "Q10",
+      "stage": "처방",
+      "title": "예약 확인 연락의 노쇼 감소 효과 (기준선만)",
+      "q": "[처방] Q10. 예약 고객에게 추가 확인 연락을 하면 노쇼율이 감소하는가? — 노쇼율 기준선",
+      "description": "현재 노쇼율 기준선(병원별·전체)만 보여준다. 효과 검증이 아니다.",
+      "tables": [
+        "reservations"
+      ],
+      "unit": "병원 1곳 + 전체 1행 (예약 이벤트)",
+      "denominator": "결과 확정 예약('예약유지' 제외)",
+      "expected_rows": 12,
+      "sql": "SELECT COALESCE(r.hospital_id, '전체') AS 병원ID,\n       COUNT(*) FILTER (WHERE r.reservation_status <> '예약유지') AS 결과확정_예약,\n       COUNT(*) FILTER (WHERE r.reservation_status = '노쇼') AS 노쇼,\n       ROUND(COUNT(*) FILTER (WHERE r.reservation_status = '노쇼') * 100.0\n             / NULLIF(COUNT(*) FILTER (WHERE r.reservation_status <> '예약유지'), 0), 1) AS 노쇼율_기준선\nFROM reservations r\nWHERE r.reservation_created_date BETWEEN DATE '2025-01-01' AND DATE '2025-06-30'\nGROUP BY GROUPING SETS ((r.hospital_id), ())\nORDER BY r.hospital_id NULLS FIRST",
+      "judge": "현재 데이터로는 해당 조치의 인과적 효과를 검증할 수 없습니다. 6개 테이블 어디에도 예약 확인 연락 여부를 기록한 열이 없어, 연락한 예약과 하지 않은 예약을 나눠 비교할 수 없습니다 · 이 표는 비교 전 기준선일 뿐입니다 · 효과를 확인하려면 예약별 연락 여부·일시·수단 기록과 무작위 배정 또는 단계적 도입 비교가 필요합니다 · 노쇼 상태는 합성 가정입니다.",
+      "check": [
+        {
+          "where": {
+            "병원ID": "전체"
+          },
+          "col": "노쇼율_기준선",
+          "want": 8.7
+        },
+        {
+          "where": {
+            "병원ID": "H011"
+          },
+          "col": "노쇼율_기준선",
+          "want": 13.3
+        }
+      ]
+    }
+  ]
+}

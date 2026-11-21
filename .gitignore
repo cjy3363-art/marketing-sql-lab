@@ -1,0 +1,19 @@
+# 비밀값 — 절대 커밋하지 않는다 (Gemini 키는 Vercel 환경 변수로만)
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+credentials*.json
+
+# 배포·개발 부산물
+.vercel/
+node_modules/
+__pycache__/
+*.pyc
+*.log
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+desktop.ini

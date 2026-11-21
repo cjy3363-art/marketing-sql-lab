@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marketing SQL Lab — 병의원 마케팅 성과 분석</title>
+<meta name="description" content="병의원 마케팅 합성 데이터를 브라우저 안의 DuckDB로 묻는 SQL 작업 공간. 모든 숫자 옆에 SQL이 있습니다.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ctext x='16' y='20.5' text-anchor='middle' font-family='Consolas,monospace' font-size='11' font-weight='700' fill='%23fff'%3ESQL%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">SQL</div>
+      <div class="brand-text">
+        <div class="brand-name">Marketing SQL Lab <span class="ver">합성 데이터</span></div>
+        <p id="engine" class="engine">데이터 엔진 준비 중…</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="화면 선택">
+      <button role="tab" data-tab="dashboard" aria-selected="true">대시보드</button>
+      <button role="tab" data-tab="preset" aria-selected="false">준비한 질문</button>
+      <button role="tab" data-tab="ask" aria-selected="false">직접 묻기</button>
+      <button role="tab" data-tab="tables" aria-selected="false">표 보기</button>
+      <button role="tab" data-tab="mine" aria-selected="false">내 파일로</button>
+    </nav>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- 대시보드 — marketing_daily 실제 집계 (질문 SQL 과 별도 상태) -->
+  <section id="tab-dashboard" class="view">
+    <div class="card filterbar">
+      <div class="filter-head">
+        <span class="card-title">데이터 조회 설정</span>
+        <button id="dash-reset" class="btn-icon" type="button" title="필터 초기화">초기화</button>
+      </div>
+      <div class="filter-grid">
+        <label class="field"><span>기간</span>
+          <span class="range">
+            <select id="dash-from" aria-label="시작 월"></select>
+            <span class="tilde">~</span>
+            <select id="dash-to" aria-label="끝 월"></select>
+          </span>
+        </label>
+        <label class="field"><span>대상 병원</span>
+          <select id="dash-hospital" aria-label="대상 병원"><option value="">전체 병원 합산</option></select>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <div>
+        <h2>마케팅 성과 요약</h2>
+        <p id="dash-scope" class="sub">집계 중…</p>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis">
+      <div class="kpi"><span class="kpi-label">총 광고비</span><span class="kpi-value" data-kpi="spend">–</span></div>
+      <div class="kpi accent"><span class="kpi-label">총 귀속 매출</span><span class="kpi-value" data-kpi="revenue">–</span></div>
+      <div class="kpi"><span class="kpi-label">총 문의</span><span class="kpi-value" data-kpi="inquiries">–</span></div>
+      <div class="kpi"><span class="kpi-label">총 예약</span><span class="kpi-value" data-kpi="reservations">–</span></div>
+      <div class="kpi"><span class="kpi-label">총 내원</span><span class="kpi-value" data-kpi="visits">–</span></div>
+      <div class="kpi"><span class="kpi-label">총 결제</span><span class="kpi-value" data-kpi="conversions">–</span></div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-head">
+        <div>
+          <h3>월별 마케팅 성과</h3>
+          <p class="sub" id="chart-sub">월별 광고비 대비 귀속 매출 (단위: 백만 원)</p>
+        </div>
+        <div class="legend">
+          <span><i class="lg-bar"></i>광고비 (막대)</span>
+          <span><i class="lg-line"></i>귀속 매출 (선)</span>
+        </div>
+      </div>
+      <div class="chart-wrap" id="dash-chart" role="img" aria-label="월별 광고비 및 귀속 매출 차트"></div>
+      <div class="chart-foot" id="dash-foot"></div>
+      <details class="chart-data">
+        <summary>월별 수치 보기</summary>
+        <div class="res" id="dash-table"></div>
+      </details>
+      <p class="fine" id="dash-note">집계 출처: marketing_daily (캠페인×일) · 문의·예약·내원·결제는 이벤트 수(고유 환자 아님) ·
+        기본 ROAS = 유료광고 채널 귀속 매출 ÷ 광고비 · 통합 ROAS는 참고값 · 광고비 0이면 산출 불가</p>
+    </div>
+  </section>
+
+  <!-- 준비한 질문 -->
+  <section id="tab-preset" class="view">
+    <div class="section-head">
+      <div>
+        <h2>SQL로 데이터 분석하기</h2>
+        <p class="sub">질문을 고르고 SQL을 실행해 데이터를 직접 확인합니다. 모든 답 옆에 SQL이 있습니다.</p>
+      </div>
+    </div>
+    <div class="segmented" id="stage-tabs" role="tablist" aria-label="분석 단계"></div>
+    <div class="topic" id="topic-bar"></div>
+    <div id="qlist" class="qlist"></div>
+  </section>
+
+  <!-- 직접 묻기 -->
+  <section id="tab-ask" class="view" hidden>
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title">SQL 쿼리 콘솔</span>
+        <span class="sub">읽기(SELECT · WITH) 한 문장만 실행합니다</span>
+      </div>
+      <div class="pills" id="schema-pills" aria-label="표 이름"></div>
+      <label class="label" for="nl">문장으로 묻기</label>
+      <textarea id="nl" rows="2" placeholder="예) 병원별 6개월 광고비 합계는?"></textarea>
+      <div class="row"><button id="btn-nl" class="ghost">SQL 만들기 (AI)</button></div>
+      <p id="nl-msg" class="note" hidden></p>
+    </div>
+    <div class="console">
+      <div class="console-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>query_editor.sql</span><span class="console-eng">DuckDB-WASM · Ctrl+Enter 실행</span></div>
+      <textarea id="sql" rows="9" class="code" spellcheck="false" aria-label="SQL">SELECT 'hospitals' AS 표, COUNT(*) AS 행 FROM hospitals
+UNION ALL SELECT 'campaigns', COUNT(*) FROM campaigns
+UNION ALL SELECT 'marketing_daily', COUNT(*) FROM marketing_daily</textarea>
+      <div class="console-actions"><button id="btn-run" class="primary">SQL 실행</button></div>
+    </div>
+    <div id="ask-out"></div>
+  </section>
+
+  <!-- 표 보기 -->
+  <section id="tab-tables" class="view" hidden>
+    <div class="card">
+      <div class="card-title-row"><span class="card-title">데이터셋 표 보기</span><span class="sub">6개 테이블 · 한 줄이 무엇인지 먼저 봅니다</span></div>
+      <p class="note-plain" id="schema-note"></p>
+    </div>
+    <div id="tables"></div>
+  </section>
+
+  <!-- 내 파일로 -->
+  <section id="tab-mine" class="view" hidden>
+    <div class="card">
+      <div class="card-title-row"><span class="card-title">내 파일로 분석하기</span></div>
+      <p class="sub">시스템에서 내려받은 엑셀이나 CSV를 넣으면, <b>준비한 질문</b>·<b>직접 묻기</b>·<b>대시보드</b>가 그 파일로 돕니다.
+        다음 달 파일을 넣으면 같은 질문이 다음 달 숫자를 냅니다.</p>
+      <label id="drop" class="drop" for="mine-file">
+        <span class="drop-title">파일을 끌어다 놓거나 눌러서 고르기</span>
+        <span class="drop-sub">Excel(.xlsx·.xls) 또는 CSV · 여러 개 한꺼번에</span>
+        <input id="mine-file" type="file" accept=".xlsx,.xls,.csv" multiple hidden>
+      </label>
+      <div id="mine-list"></div>
+      <div class="row"><button id="btn-mine-reset" class="ghost" hidden>원래 데이터로 돌아가기</button></div>
+      <p class="sub" id="mine-rule"></p>
+    </div>
+    <div class="privacy">파일은 <b>이 브라우저를 떠나지 않습니다.</b> 읽기도 계산도 이 화면 안에서 합니다.
+      «문장으로 묻기»를 눌러도 AI에게는 질문 문장과 «표 보기»의 표 설명만 갑니다. 내 파일의 내용은 가지 않습니다.</div>
+  </section>
+
+  <footer class="fineprint">
+    데이터는 전부 만들어낸 것입니다(병원명 «(가상)»). 데이터베이스(DuckDB)는 <b>이 브라우저 안</b>에서 돕니다.
+    AI에게는 질문 문장과 표 설명만 보냅니다 — 데이터는 보내지 않습니다.
+  </footer>
+</main>
+<script src="lib/xlsx.full.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

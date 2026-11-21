@@ -1,0 +1,1015 @@
+{
+ "note": "한 줄이 무엇인지(grain)·키는 사람이 정한 것입니다. 조인하기 전에 반드시 봅니다. 관계: hospitals 1:N campaigns 1:N marketing_daily. 병원 기준 집계는 LEFT JOIN(캠페인 없는 H012 유지). 모든 데이터는 합성(가상) 데이터입니다. 기본 ROAS = 유료광고 채널 귀속 매출 ÷ 광고비 × 100, 통합 ROAS(참고) = 전체 귀속 매출 ÷ 광고비 × 100. 광고비 합이 0이면 CPC·CPL·CPR·ROAS는 NULL(산출 불가). 문의·예약·내원·결제는 이벤트 수이며 고유 환자 수가 아닙니다. 목표는 월 기준입니다. 상세 표 inquiries(문의 1건)·reservations(예약 1건)·payments(결제 1건)는 한 줄의 단위가 서로 다르고 marketing_daily(캠페인×일)와도 다릅니다 — 서로 또는 marketing_daily 와 campaign_id·날짜로 직접 JOIN 하면 행이 곱해지므로, 먼저 campaign_id + 날짜로 집계한 뒤 붙이고 상세 표끼리는 inquiry_id·reservation_id 로만 잇습니다. 상세 표의 건수·날짜·일 매출 합계는 marketing_daily 와 일치하지만, customer_id 와 이벤트 사이 연결(문의→예약→결제)·상태·응답시간은 합성 가정입니다.",
+ "relationships": [
+  {
+   "from": "campaigns.hospital_id",
+   "to": "hospitals.hospital_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "marketing_daily.campaign_id",
+   "to": "campaigns.campaign_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "inquiries.campaign_id",
+   "to": "campaigns.campaign_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "reservations.campaign_id",
+   "to": "campaigns.campaign_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "payments.campaign_id",
+   "to": "campaigns.campaign_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "inquiries.hospital_id",
+   "to": "hospitals.hospital_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "reservations.hospital_id",
+   "to": "hospitals.hospital_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "payments.hospital_id",
+   "to": "hospitals.hospital_id",
+   "type": "N:1",
+   "nullable": false
+  },
+  {
+   "from": "reservations.inquiry_id",
+   "to": "inquiries.inquiry_id",
+   "type": "N:0..1 (문의 1건은 예약 최대 1건)",
+   "nullable": true,
+   "synthetic": true
+  },
+  {
+   "from": "payments.reservation_id",
+   "to": "reservations.reservation_id",
+   "type": "N:0..1 (예약 1건에 결제 여러 건 가능)",
+   "nullable": true,
+   "synthetic": true
+  },
+  {
+   "from": "payments.inquiry_id",
+   "to": "inquiries.inquiry_id",
+   "type": "N:0..1 (연결 예약의 inquiry_id 복사)",
+   "nullable": true,
+   "synthetic": true
+  }
+ ],
+ "tables": {
+  "hospitals": {
+   "grain": "병원 1곳",
+   "rows": 12,
+   "primary_key": [
+    "hospital_id"
+   ],
+   "foreign_keys": [],
+   "join": [
+    "campaigns.hospital_id = hospitals.hospital_id (1:N, 캠페인 없는 병원 H012 → LEFT JOIN)",
+    "inquiries / reservations / payments 도 hospital_id 를 직접 가진다 (캠페인의 병원과 항상 같음)"
+   ],
+   "desc": "병의원 클라이언트 기본 정보와 **월간** 목표. 목표는 월 기준이며 6개월 합계와 바로 비교하지 않는다",
+   "cautions": [
+    "월 목표·월 예산을 캠페인·일별·상세 이벤트와 붙인 뒤 SUM 하면 행 수만큼 중복된다 — 실적을 병원(×월)로 먼저 집계한 뒤 붙인다",
+    "목표 달성률은 계약 시작월부터. 계약 전 월은 '계약 전', 캠페인 없는 H012 는 '미운영'"
+   ],
+   "columns": [
+    {
+     "name": "hospital_id",
+     "type": "VARCHAR",
+     "desc": "병원 ID (H001~H012)",
+     "nullable": false
+    },
+    {
+     "name": "hospital_name",
+     "type": "VARCHAR",
+     "desc": "가상 병원명",
+     "nullable": false
+    },
+    {
+     "name": "hospital_type",
+     "type": "VARCHAR",
+     "desc": "진료 유형",
+     "nullable": false,
+     "values": [
+      "성형외과",
+      "여성의원",
+      "치과",
+      "피부과",
+      "한방병원",
+      "한의원"
+     ]
+    },
+    {
+     "name": "region",
+     "type": "VARCHAR",
+     "desc": "소재 지역",
+     "nullable": false,
+     "values": [
+      "경기 고양",
+      "경기 광주",
+      "경기 성남",
+      "대구 북구",
+      "대구 수성",
+      "부산 부산진",
+      "서울 강남",
+      "서울 마포",
+      "서울 서초",
+      "서울 송파",
+      "인천 연수"
+     ]
+    },
+    {
+     "name": "main_treatment",
+     "type": "VARCHAR",
+     "desc": "대표 주력 시술",
+     "nullable": false,
+     "values": [
+      "교통사고 재활",
+      "눈성형",
+      "눈재수술",
+      "리프팅",
+      "보톡스",
+      "실리프팅",
+      "안면윤곽",
+      "여드름치료",
+      "여성 건강검진",
+      "임플란트",
+      "체형관리"
+     ]
+    },
+    {
+     "name": "secondary_treatment",
+     "type": "VARCHAR",
+     "desc": "보조 주력 시술",
+     "nullable": false,
+     "values": [
+      "눈성형",
+      "레이저토닝",
+      "스킨부스터",
+      "자궁·난소 초음파",
+      "추나요법",
+      "치아미백",
+      "코성형",
+      "통증치료",
+      "피부관리",
+      "필러"
+     ]
+    },
+    {
+     "name": "business_scale",
+     "type": "VARCHAR",
+     "desc": "병원 규모",
+     "nullable": false,
+     "values": [
+      "대형",
+      "소형",
+      "중형"
+     ]
+    },
+    {
+     "name": "monthly_marketing_budget",
+     "type": "BIGINT",
+     "desc": "월간 마케팅 예산(원, 매체비+제작비 포함 개념)",
+     "nullable": false
+    },
+    {
+     "name": "monthly_inquiry_target",
+     "type": "BIGINT",
+     "desc": "월간 문의 목표(건)",
+     "nullable": false
+    },
+    {
+     "name": "monthly_reservation_target",
+     "type": "BIGINT",
+     "desc": "월간 예약 목표(건)",
+     "nullable": false
+    },
+    {
+     "name": "monthly_visit_target",
+     "type": "BIGINT",
+     "desc": "월간 내원 목표(건)",
+     "nullable": false
+    },
+    {
+     "name": "monthly_revenue_target",
+     "type": "BIGINT",
+     "desc": "월간 캠페인 귀속 매출 목표(원)",
+     "nullable": false
+    },
+    {
+     "name": "contract_start_date",
+     "type": "DATE",
+     "desc": "계약 시작일 — 목표 달성률은 이 달부터 대상",
+     "nullable": false
+    },
+    {
+     "name": "contract_end_date",
+     "type": "DATE",
+     "desc": "계약 종료일, NULL = 미정",
+     "nullable": true
+    },
+    {
+     "name": "contract_status",
+     "type": "VARCHAR",
+     "desc": "계약 상태",
+     "nullable": false,
+     "values": [
+      "신규계약",
+      "온보딩중",
+      "운영중"
+     ]
+    },
+    {
+     "name": "account_manager",
+     "type": "VARCHAR",
+     "desc": "담당 마케터 가상 코드",
+     "nullable": false,
+     "values": [
+      "MKT01",
+      "MKT02",
+      "MKT03",
+      "MKT04",
+      "MKT05"
+     ]
+    },
+    {
+     "name": "marketing_priority",
+     "type": "VARCHAR",
+     "desc": "주요 마케팅 목표",
+     "nullable": false,
+     "values": [
+      "SNS 인지도 및 문의 확대",
+      "검색 의도 기반 예약 확보",
+      "고관여 상담 예약 확보",
+      "고단가 수술 상담 확보",
+      "문의량 확대",
+      "신규 문의 확보",
+      "예약 및 내원 전환",
+      "젊은 고객층 인지도",
+      "지역 SEO 노출",
+      "지역 내 예약 확보",
+      "콘텐츠 기반 신뢰도 구축"
+     ]
+    },
+    {
+     "name": "remarks",
+     "type": "VARCHAR",
+     "desc": "운영 특이사항, NULL 가능",
+     "nullable": false
+    }
+   ]
+  },
+  "campaigns": {
+   "grain": "캠페인 1개",
+   "rows": 122,
+   "primary_key": [
+    "campaign_id"
+   ],
+   "foreign_keys": [
+    {
+     "column": "hospital_id",
+     "references": "hospitals.hospital_id",
+     "nullable": false
+    }
+   ],
+   "join": [
+    "campaigns.hospital_id = hospitals.hospital_id (N:1)",
+    "marketing_daily.campaign_id = campaigns.campaign_id (1:N, 성과 없는 캠페인 7개 → LEFT JOIN)",
+    "inquiries / reservations / payments .campaign_id = campaigns.campaign_id (1:N)"
+   ],
+   "desc": "병원별 마케팅 캠페인. planned_budget 은 캠페인 전체 기간 계획 예산이라 일별 표와 붙인 뒤 SUM 하면 중복된다",
+   "cautions": [
+    "planned_budget 은 캠페인 단위 값 — 일별·상세 이벤트와 붙인 뒤 SUM 금지",
+    "비유료 채널의 planned_budget 은 콘텐츠 제작·관리비 계획이며 광고비(spend)가 아니다"
+   ],
+   "columns": [
+    {
+     "name": "campaign_id",
+     "type": "VARCHAR",
+     "desc": "캠페인 ID (CMP001~CMP122)",
+     "nullable": false
+    },
+    {
+     "name": "hospital_id",
+     "type": "VARCHAR",
+     "desc": "병원 ID (H001~H012)",
+     "nullable": false
+    },
+    {
+     "name": "campaign_name",
+     "type": "VARCHAR",
+     "desc": "캠페인 이름",
+     "nullable": false
+    },
+    {
+     "name": "channel",
+     "type": "VARCHAR",
+     "desc": "운영 채널",
+     "nullable": false,
+     "values": [
+      "구글 검색광고",
+      "네이버 검색광고",
+      "네이버 블로그 SEO",
+      "네이버 플레이스",
+      "메타 광고",
+      "온라인 커뮤니티 콘텐츠",
+      "유튜브 광고",
+      "유튜브 콘텐츠",
+      "인스타그램",
+      "틱톡"
+     ]
+    },
+    {
+     "name": "channel_group",
+     "type": "VARCHAR",
+     "desc": "채널 그룹 — 기본 ROAS는 '유료광고'만 분자로",
+     "nullable": false,
+     "values": [
+      "유료광고",
+      "자연유입",
+      "커뮤니티",
+      "콘텐츠"
+     ]
+    },
+    {
+     "name": "campaign_type",
+     "type": "VARCHAR",
+     "desc": "운영 방식",
+     "nullable": false
+    },
+    {
+     "name": "target_treatment",
+     "type": "VARCHAR",
+     "desc": "홍보 대상 시술",
+     "nullable": false
+    },
+    {
+     "name": "campaign_objective",
+     "type": "VARCHAR",
+     "desc": "캠페인 목적",
+     "nullable": false,
+     "values": [
+      "문의",
+      "예약",
+      "유입",
+      "인지도"
+     ]
+    },
+    {
+     "name": "target_region",
+     "type": "VARCHAR",
+     "desc": "타깃 지역",
+     "nullable": false,
+     "values": [
+      "경기 광주",
+      "경기 성남",
+      "대구 북구",
+      "대구 수성",
+      "부산 부산진",
+      "서울 강남",
+      "서울 마포",
+      "서울 서초",
+      "서울 송파",
+      "인천 연수",
+      "전국"
+     ]
+    },
+    {
+     "name": "target_age_group",
+     "type": "VARCHAR",
+     "desc": "타깃 연령대",
+     "nullable": false,
+     "values": [
+      "10-20대",
+      "20-30대",
+      "20-40대",
+      "30-40대",
+      "30-50대",
+      "40-50대",
+      "40-60대",
+      "50대 이상",
+      "전체"
+     ]
+    },
+    {
+     "name": "start_date",
+     "type": "DATE",
+     "desc": "캠페인 시작일(분석 기간 이전일 수 있음)",
+     "nullable": false
+    },
+    {
+     "name": "end_date",
+     "type": "DATE",
+     "desc": "캠페인 종료일(계획, 분석 기간 이후일 수 있음)",
+     "nullable": false
+    },
+    {
+     "name": "planned_budget",
+     "type": "BIGINT",
+     "desc": "캠페인 전체 기간 계획 예산(원). 비유료 채널은 콘텐츠 제작·관리비",
+     "nullable": false
+    },
+    {
+     "name": "campaign_status",
+     "type": "VARCHAR",
+     "desc": "운영 상태 — 취소·집행예정·보류·확인필요는 일별 성과 없음",
+     "nullable": false,
+     "values": [
+      "보류",
+      "운영중",
+      "일시중지",
+      "종료",
+      "집행예정",
+      "취소",
+      "확인필요"
+     ]
+    },
+    {
+     "name": "landing_type",
+     "type": "VARCHAR",
+     "desc": "문의 유입 경로",
+     "nullable": false,
+     "values": [
+      "네이버 예약",
+      "랜딩페이지",
+      "리드폼",
+      "전화 연결",
+      "카카오톡 채널",
+      "홈페이지 상담폼"
+     ]
+    },
+    {
+     "name": "content_format",
+     "type": "VARCHAR",
+     "desc": "콘텐츠 형식",
+     "nullable": false,
+     "values": [
+      "게시글",
+      "롱폼 영상",
+      "블로그 포스트",
+      "숏폼 영상",
+      "이미지",
+      "카드뉴스",
+      "텍스트 광고",
+      "플레이스 소식"
+     ]
+    },
+    {
+     "name": "tracking_method",
+     "type": "VARCHAR",
+     "desc": "성과 귀속 방식 ('미연동' = 성과 미수집)",
+     "nullable": false,
+     "values": [
+      "UTM+상담 시 유입경로 문진",
+      "UTM+상담폼 전환",
+      "네이버 예약 연동+콜트래킹",
+      "미연동",
+      "상담 시 유입경로 문진",
+      "상담 시 유입경로 문진+UTM",
+      "카카오 유입코드",
+      "콜트래킹+UTM",
+      "픽셀 전환+카카오 유입코드"
+     ]
+    },
+    {
+     "name": "remarks",
+     "type": "VARCHAR",
+     "desc": "운영 특이사항, NULL 가능",
+     "nullable": true
+    }
+   ]
+  },
+  "marketing_daily": {
+   "grain": "캠페인 × 일",
+   "rows": 11405,
+   "primary_key": [
+    "campaign_id",
+    "report_date"
+   ],
+   "foreign_keys": [
+    {
+     "column": "campaign_id",
+     "references": "campaigns.campaign_id",
+     "nullable": false
+    }
+   ],
+   "join": [
+    "marketing_daily.campaign_id = campaigns.campaign_id (N:1) — 병원은 campaigns 를 거쳐 hospital_id 로 잇는다",
+    "상세 3표와는 campaign_id + 날짜로 대응 — 상세 표를 먼저 campaign_id + 날짜로 집계한 뒤 붙인다"
+   ],
+   "desc": "캠페인별 하루 성과. 문의·예약·내원·결제는 발생일 기준 **이벤트 수**(고유 환자 수 아님)",
+   "cautions": [
+    "상세 이벤트 표(inquiries·reservations·payments)를 campaign_id + 날짜로 직접 JOIN 하면 행이 곱해져 spend 가 중복 합산된다 (실측 11,405행 → 22,520행, 광고비 1.88배)",
+    "기간별 예약÷문의는 같은 고객 코호트 전환율이 아닌 기간 내 이벤트 비율"
+   ],
+   "columns": [
+    {
+     "name": "campaign_id",
+     "type": "VARCHAR",
+     "desc": "캠페인 ID (CMP001~CMP122)",
+     "nullable": false
+    },
+    {
+     "name": "report_date",
+     "type": "DATE",
+     "desc": "성과 기준일 (2025-01-01~2025-06-30)",
+     "nullable": false
+    },
+    {
+     "name": "spend",
+     "type": "BIGINT",
+     "desc": "광고 매체 집행비(원). 비유료 채널은 0",
+     "nullable": false
+    },
+    {
+     "name": "impressions",
+     "type": "BIGINT",
+     "desc": "노출 수",
+     "nullable": false
+    },
+    {
+     "name": "reach",
+     "type": "BIGINT",
+     "desc": "도달 수, NULL = 측정 불가 채널",
+     "nullable": true
+    },
+    {
+     "name": "clicks",
+     "type": "BIGINT",
+     "desc": "클릭 수, NULL = 측정 불가(커뮤니티)",
+     "nullable": true
+    },
+    {
+     "name": "engagements",
+     "type": "BIGINT",
+     "desc": "참여 수, NULL = 측정 불가(검색광고)",
+     "nullable": true
+    },
+    {
+     "name": "content_published",
+     "type": "BIGINT",
+     "desc": "발행 콘텐츠 수",
+     "nullable": false
+    },
+    {
+     "name": "inquiries",
+     "type": "BIGINT",
+     "desc": "문의 이벤트 = phone + kakao + form",
+     "nullable": false
+    },
+    {
+     "name": "phone_inquiries",
+     "type": "BIGINT",
+     "desc": "전화 문의 이벤트",
+     "nullable": false
+    },
+    {
+     "name": "kakao_inquiries",
+     "type": "BIGINT",
+     "desc": "카카오톡 문의 이벤트",
+     "nullable": false
+    },
+    {
+     "name": "form_inquiries",
+     "type": "BIGINT",
+     "desc": "상담폼 문의 이벤트",
+     "nullable": false
+    },
+    {
+     "name": "reservations",
+     "type": "BIGINT",
+     "desc": "예약 생성 이벤트(생성일 기준)",
+     "nullable": false
+    },
+    {
+     "name": "visits",
+     "type": "BIGINT",
+     "desc": "내원 이벤트(내원일 기준)",
+     "nullable": false
+    },
+    {
+     "name": "conversions",
+     "type": "BIGINT",
+     "desc": "결제 이벤트(결제일 기준)",
+     "nullable": false
+    },
+    {
+     "name": "attributed_revenue",
+     "type": "BIGINT",
+     "desc": "캠페인 귀속 결제 금액(원), 결제 0건이면 0",
+     "nullable": false
+    },
+    {
+     "name": "notes",
+     "type": "VARCHAR",
+     "desc": "특이사항, NULL 가능",
+     "nullable": true
+    }
+   ]
+  },
+  "inquiries": {
+   "grain": "문의 이벤트 1건",
+   "rows": 11210,
+   "primary_key": [
+    "inquiry_id"
+   ],
+   "foreign_keys": [
+    {
+     "column": "hospital_id",
+     "references": "hospitals.hospital_id",
+     "nullable": false
+    },
+    {
+     "column": "campaign_id",
+     "references": "campaigns.campaign_id",
+     "nullable": false
+    }
+   ],
+   "join": [
+    "inquiries.campaign_id = campaigns.campaign_id (N:1)",
+    "reservations.inquiry_id = inquiries.inquiry_id (문의 1 : 예약 0..1, reservations 쪽 NULL 허용)",
+    "payments.inquiry_id = inquiries.inquiry_id (문의 1 : 결제 0..N, payments 쪽 NULL 허용 — 연결 예약의 inquiry_id 복사)"
+   ],
+   "desc": "개별 문의 이벤트. 캠페인×날짜×문의유형 건수는 marketing_daily 와 정확히 일치(관측 기반). customer_id·inquiry_type·inquiry_status·response_time_minutes·assigned_manager 는 합성 가정",
+   "cautions": [
+    "customer_id 는 가상 고객 ID(합성) — 실제 고유 환자 수가 아니다",
+    "inquiry_status '상담완료' ≠ 예약. 예약 여부는 reservations.inquiry_id 로 확인",
+    "response_time_minutes NULL = 연결실패(응답 없음), 0 = 즉시 응답"
+   ],
+   "columns": [
+    {
+     "name": "inquiry_id",
+     "type": "VARCHAR",
+     "desc": "문의 ID (I000001~)",
+     "nullable": false
+    },
+    {
+     "name": "customer_id",
+     "type": "VARCHAR",
+     "desc": "가상 고객 ID (P000001~, 합성)",
+     "nullable": false
+    },
+    {
+     "name": "hospital_id",
+     "type": "VARCHAR",
+     "desc": "병원 ID (H001~H012)",
+     "nullable": false
+    },
+    {
+     "name": "campaign_id",
+     "type": "VARCHAR",
+     "desc": "캠페인 ID (CMP001~CMP122)",
+     "nullable": false
+    },
+    {
+     "name": "inquiry_date",
+     "type": "DATE",
+     "desc": "문의 발생일 = marketing_daily.report_date",
+     "nullable": false
+    },
+    {
+     "name": "inquiry_channel",
+     "type": "VARCHAR",
+     "desc": "문의 경로 — marketing_daily phone/kakao/form 과 대응",
+     "nullable": false,
+     "values": [
+      "상담폼",
+      "전화",
+      "카카오톡"
+     ]
+    },
+    {
+     "name": "target_treatment",
+     "type": "VARCHAR",
+     "desc": "문의 대상 시술(브랜드 캠페인은 대표/보조 시술로 배정한 합성 값)",
+     "nullable": false
+    },
+    {
+     "name": "inquiry_type",
+     "type": "VARCHAR",
+     "desc": "신규 문의 / 재문의 (합성)",
+     "nullable": false,
+     "values": [
+      "신규 문의",
+      "재문의"
+     ]
+    },
+    {
+     "name": "inquiry_status",
+     "type": "VARCHAR",
+     "desc": "상담완료 / 연결실패 / 고객응답없음 (합성, 예약 여부와 다름)",
+     "nullable": false,
+     "values": [
+      "고객응답없음",
+      "상담완료",
+      "연결실패"
+     ]
+    },
+    {
+     "name": "response_time_minutes",
+     "type": "BIGINT",
+     "desc": "최초 응답 소요 분 (합성), NULL = 연결실패",
+     "nullable": true
+    },
+    {
+     "name": "assigned_manager",
+     "type": "VARCHAR",
+     "desc": "가상 상담 담당자 코드 (합성)",
+     "nullable": false
+    },
+    {
+     "name": "notes",
+     "type": "VARCHAR",
+     "desc": "합성 데이터 생성 특이사항, NULL 가능",
+     "nullable": true
+    }
+   ]
+  },
+  "reservations": {
+   "grain": "예약 이벤트 1건 (실제 내원은 최대 1회)",
+   "rows": 4688,
+   "primary_key": [
+    "reservation_id"
+   ],
+   "foreign_keys": [
+    {
+     "column": "hospital_id",
+     "references": "hospitals.hospital_id",
+     "nullable": false
+    },
+    {
+     "column": "campaign_id",
+     "references": "campaigns.campaign_id",
+     "nullable": false
+    },
+    {
+     "column": "inquiry_id",
+     "references": "inquiries.inquiry_id",
+     "nullable": true
+    }
+   ],
+   "join": [
+    "reservations.inquiry_id = inquiries.inquiry_id (N:0..1, NULL = 직접예약 → LEFT JOIN)",
+    "payments.reservation_id = reservations.reservation_id (예약 1 : 결제 0..N — 추가결제로 1:N 가능)"
+   ],
+   "desc": "개별 예약 이벤트. 생성일 기준 건수는 marketing_daily.reservations, actual_visit_date 기준 건수는 marketing_daily.visits 와 캠페인×날짜 단위로 정확히 일치. 문의 연결·상태·예정일·취소 사유는 합성 가정",
+   "cautions": [
+    "예약 수는 reservation_created_date, 내원 수는 actual_visit_date 기준으로 센다 (날짜 기준이 다름)",
+    "inquiry_id NULL(직접예약 192건)은 원본 관측이 아니라 합성 생성 정책(4%)으로 정한 값",
+    "visit_status '확인불가' = 예정일이 캠페인 귀속기간·분석기간 이후라 미관측 (노쇼 아님)",
+    "payments 와 붙인 뒤 예약 수는 COUNT(DISTINCT reservation_id) 로 센다 (추가결제 1:N)"
+   ],
+   "columns": [
+    {
+     "name": "reservation_id",
+     "type": "VARCHAR",
+     "desc": "예약 ID (R000001~)",
+     "nullable": false
+    },
+    {
+     "name": "inquiry_id",
+     "type": "VARCHAR",
+     "desc": "연결된 문의 ID, NULL = 직접예약(합성 정책)",
+     "nullable": true
+    },
+    {
+     "name": "customer_id",
+     "type": "VARCHAR",
+     "desc": "가상 고객 ID (P000001~, 합성)",
+     "nullable": false
+    },
+    {
+     "name": "hospital_id",
+     "type": "VARCHAR",
+     "desc": "병원 ID (H001~H012)",
+     "nullable": false
+    },
+    {
+     "name": "campaign_id",
+     "type": "VARCHAR",
+     "desc": "캠페인 ID (CMP001~CMP122)",
+     "nullable": false
+    },
+    {
+     "name": "reservation_created_date",
+     "type": "DATE",
+     "desc": "예약 생성일 = marketing_daily.reservations 의 날짜",
+     "nullable": false
+    },
+    {
+     "name": "scheduled_visit_date",
+     "type": "DATE",
+     "desc": "예정 내원일 (합성)",
+     "nullable": false
+    },
+    {
+     "name": "actual_visit_date",
+     "type": "DATE",
+     "desc": "실제 내원일 = marketing_daily.visits 의 날짜, NULL = 미내원·확인불가",
+     "nullable": true
+    },
+    {
+     "name": "reservation_status",
+     "type": "VARCHAR",
+     "desc": "내원완료 / 취소 / 노쇼 / 예약유지 (합성)",
+     "nullable": false,
+     "values": [
+      "내원완료",
+      "노쇼",
+      "예약유지",
+      "취소"
+     ]
+    },
+    {
+     "name": "visit_status",
+     "type": "VARCHAR",
+     "desc": "방문완료 / 취소 / 노쇼 / 확인불가 (합성)",
+     "nullable": false,
+     "values": [
+      "노쇼",
+      "방문완료",
+      "취소",
+      "확인불가"
+     ]
+    },
+    {
+     "name": "cancellation_reason",
+     "type": "VARCHAR",
+     "desc": "취소 사유 (합성), 취소가 아니면 NULL",
+     "nullable": true,
+     "values": [
+      "개인 사정",
+      "단순 변심",
+      "비용 부담",
+      "연락 두절 후 취소 처리",
+      "일정 변경 요청",
+      "타 병원 선택"
+     ]
+    },
+    {
+     "name": "linkage_type",
+     "type": "VARCHAR",
+     "desc": "연결 유형 (합성) — 예약: 문의연결/직접예약, 결제: 예약연결/직접결제",
+     "nullable": false,
+     "values": [
+      "문의연결",
+      "직접예약"
+     ]
+    },
+    {
+     "name": "notes",
+     "type": "VARCHAR",
+     "desc": "합성 데이터 생성 특이사항(직접예약·일정변경·귀속기간 종료), NULL 가능",
+     "nullable": true
+    }
+   ]
+  },
+  "payments": {
+   "grain": "결제 이벤트 1건",
+   "rows": 2608,
+   "primary_key": [
+    "payment_id"
+   ],
+   "foreign_keys": [
+    {
+     "column": "hospital_id",
+     "references": "hospitals.hospital_id",
+     "nullable": false
+    },
+    {
+     "column": "campaign_id",
+     "references": "campaigns.campaign_id",
+     "nullable": false
+    },
+    {
+     "column": "reservation_id",
+     "references": "reservations.reservation_id",
+     "nullable": true
+    },
+    {
+     "column": "inquiry_id",
+     "references": "inquiries.inquiry_id",
+     "nullable": true
+    }
+   ],
+   "join": [
+    "payments.reservation_id = reservations.reservation_id (N:0..1, NULL = 직접결제 → LEFT JOIN)",
+    "payments.inquiry_id = inquiries.inquiry_id (N:0..1) — 연결 예약의 inquiry_id 와 항상 같다"
+   ],
+   "desc": "개별 결제 이벤트(모두 결제완료). 캠페인×날짜 건수·금액 합계는 marketing_daily 의 conversions·attributed_revenue 와 정확히 일치. 건별 금액 배분·시술·결제 유형·예약 연결은 합성 가정",
+   "cautions": [
+    "payment_amount 는 캠페인 귀속 결제액 — 병원 전체 매출이 아니며 환불·취소는 없다",
+    "reservation_id NULL(직접결제 79건)은 원본 관측이 아니라 합성 생성 정책(3%)으로 정한 값",
+    "건별 금액은 하루 합계를 시술 단가 비례로 나눈 가정 — 일 합계만 관측 기반"
+   ],
+   "columns": [
+    {
+     "name": "payment_id",
+     "type": "VARCHAR",
+     "desc": "결제 ID (PY000001~)",
+     "nullable": false
+    },
+    {
+     "name": "reservation_id",
+     "type": "VARCHAR",
+     "desc": "예약 ID (R000001~)",
+     "nullable": true
+    },
+    {
+     "name": "inquiry_id",
+     "type": "VARCHAR",
+     "desc": "연결 예약의 문의 ID, NULL = 직접결제 또는 직접예약에서 온 결제",
+     "nullable": true
+    },
+    {
+     "name": "customer_id",
+     "type": "VARCHAR",
+     "desc": "가상 고객 ID (P000001~, 합성)",
+     "nullable": false
+    },
+    {
+     "name": "hospital_id",
+     "type": "VARCHAR",
+     "desc": "병원 ID (H001~H012)",
+     "nullable": false
+    },
+    {
+     "name": "campaign_id",
+     "type": "VARCHAR",
+     "desc": "캠페인 ID (CMP001~CMP122)",
+     "nullable": false
+    },
+    {
+     "name": "payment_date",
+     "type": "DATE",
+     "desc": "결제일 = marketing_daily.conversions 의 날짜",
+     "nullable": false
+    },
+    {
+     "name": "treatment",
+     "type": "VARCHAR",
+     "desc": "결제 대상 시술 (합성)",
+     "nullable": false
+    },
+    {
+     "name": "payment_amount",
+     "type": "BIGINT",
+     "desc": "결제 금액(원). 캠페인×날짜 합계 = marketing_daily.attributed_revenue",
+     "nullable": false
+    },
+    {
+     "name": "payment_status",
+     "type": "VARCHAR",
+     "desc": "결제완료 (환불·취소 미생성)",
+     "nullable": false,
+     "values": [
+      "결제완료"
+     ]
+    },
+    {
+     "name": "payment_type",
+     "type": "VARCHAR",
+     "desc": "신규결제 / 추가결제 / 재결제 (합성)",
+     "nullable": false,
+     "values": [
+      "신규결제",
+      "재결제",
+      "추가결제"
+     ]
+    },
+    {
+     "name": "linkage_type",
+     "type": "VARCHAR",
+     "desc": "연결 유형 (합성) — 예약: 문의연결/직접예약, 결제: 예약연결/직접결제",
+     "nullable": false,
+     "values": [
+      "예약연결",
+      "직접결제"
+     ]
+    },
+    {
+     "name": "notes",
+     "type": "VARCHAR",
+     "desc": "합성 데이터 생성 특이사항(추가결제·직접결제), NULL 가능",
+     "nullable": true
+    }
+   ]
+  }
+ }
+}
