@@ -7,6 +7,7 @@
   받는 것   {"question": "모바일 신청 완료율은?", "schema": {...schema.json...}}
   주는 것   {"sql": "SELECT ...", "why": "어떻게 셌는지 한 문장", "model": "..."}
             실패하면 {"sql": null, "reason": "..."} — 200
+            키(GEMINI_API_KEY)가 없으면 Gemini 를 부르지 않고 {"sql": null, "disabled": true, "reason": "<비활성 안내>"} — 200
 
 읽기(SELECT · WITH)가 아닌 SQL은 돌려주지 않는다.
 외부 라이브러리를 쓰지 않는다.
@@ -22,6 +23,7 @@ from http.server import BaseHTTPRequestHandler
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 TIMEOUT = 25
+AI_OFF = "AI 질문 변환 기능은 현재 비활성화되어 있습니다. 준비한 질문 또는 직접 SQL 입력 기능을 이용해 주세요."
 
 FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|create|alter|attach|detach|copy|pragma|install|load|export|import|call|set)\b", re.I)
 
@@ -95,7 +97,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not key:
-            return self._send({"sql": None, "reason": "키가 없습니다 — Vercel 환경 변수 GEMINI_API_KEY"})
+            return self._send({"sql": None, "disabled": True, "reason": AI_OFF})
         try:
             n = int(self.headers.get("Content-Length", "0"))
             req = json.loads(self.rfile.read(min(n, 80000)).decode("utf-8"))

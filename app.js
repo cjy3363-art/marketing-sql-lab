@@ -244,6 +244,7 @@ function renderPills() {
   }));
 }
 
+const AI_OFF = "AI 질문 변환 기능은 현재 비활성화되어 있습니다. 준비한 질문 또는 직접 SQL 입력 기능을 이용해 주세요.";
 $("#btn-nl").addEventListener("click", async () => {
   const q = $("#nl").value.trim();
   if (!q) return;
@@ -252,14 +253,18 @@ $("#btn-nl").addEventListener("click", async () => {
   try {
     const res = await fetch("api/sql", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: q, schema: S.schema }) });
-    r = res.ok ? await res.json() : { sql: null, reason: `서버 함수가 없습니다 (${res.status}) — 배포하면 생깁니다` };
+    // 404·405·501 = 서버 함수가 없는 환경(정적 서버 등) → AI 기능 비활성으로 본다
+    r = res.ok ? await res.json()
+      : [404, 405, 501].includes(res.status) ? { sql: null, disabled: true }
+      : { sql: null, reason: `서버 함수가 없습니다 (${res.status}) — 배포하면 생깁니다` };
   } catch (e) { r = { sql: null, reason: "서버 함수에 닿지 못했습니다" }; }
   $("#nl-msg").hidden = false;
   if (r.sql) {
     $("#sql").value = r.sql;
     $("#nl-msg").textContent = `AI가 쓴 SQL입니다 — ${r.why || ""} · 실행 전에 읽어 보고, 결과 하나는 손으로 검산하십시오.`;
   } else {
-    $("#nl-msg").textContent = `SQL을 만들지 못했습니다 — ${r.reason}. 아래 SQL을 직접 고쳐서 실행할 수 있습니다.`;
+    $("#nl-msg").textContent = r.disabled ? AI_OFF
+      : `SQL을 만들지 못했습니다 — ${r.reason}. 아래 SQL을 직접 고쳐서 실행할 수 있습니다.`;
   }
   b.disabled = false; b.textContent = "SQL 만들기 (AI)";
 });
