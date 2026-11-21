@@ -1,0 +1,20 @@
+# Vercel 업로드 대상 = 웹앱 실행 파일만 (허용 목록). .env.local(Vercel CLI 토큰)·.git·.vercel 등은 올라가지 않는다
+/*
+!/index.html
+!/style.css
+!/app.js
+!/schema.json
+!/questions.json
+!/vercel.json
+!/lib
+/lib/*
+!/lib/xlsx.full.min.js
+!/lib/LICENSE-sheetjs.txt
+!/data
+/data/*
+!/data/*.parquet
+!/api
+/api/*
+!/api/sql.py
+.env
+.env.*
