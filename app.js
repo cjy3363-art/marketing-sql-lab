@@ -131,7 +131,7 @@ function fmt(v) {
 }
 
 function render({ fields, rows }, ms) {
-  const head = `<tr>${fields.map(f => `<th>${esc(f)}</th>`).join("")}</tr>`;
+  const head = `<tr>${fields.map(f => `<th${rows.length && typeof rows[0][f] === "number" ? ` class="n"` : ""}>${esc(f)}</th>`).join("")}</tr>`;
   const body = rows.slice(0, 50).map(r => `<tr>${fields.map(f =>
     `<td class="${typeof r[f] === "number" ? "n" : ""}">${fmt(r[f])}</td>`).join("")}</tr>`).join("");
   let html = `<div class="res-head"><span>실행 결과 <b>${rows.length.toLocaleString("ko-KR")}행</b> 반환</span>`
@@ -318,8 +318,10 @@ $("#btn-nl").addEventListener("click", async () => {
 });
 
 // ── 표 보기 ───────────────────────────────────────────
+// 표 설명 글의 **굵게** 표시만 굵은 글씨로 바꾼다 (나머지는 글자 그대로). schema.json 은 고치지 않는다
+const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 function renderTables() {
-  $("#schema-note").textContent = S.schema.note;
+  $("#schema-note").innerHTML = `<ul>${String(S.schema.note || "").split(/(?<=\.)\s+/).filter(Boolean).map(s => `<li>${md(s)}</li>`).join("")}</ul>`;
   const entries = Object.entries(S.schema.tables);
   const fk = i => (i.foreign_keys || []).map(f => `${f.column} → ${f.references}${f.nullable ? " (NULL 허용)" : ""}`).join(", ") || "없음";
   $("#tables").innerHTML = `<div class="chips" role="tablist">` + entries.map(([t, i], k) =>
@@ -327,16 +329,16 @@ function renderTables() {
     + entries.map(([t, i], k) => `
     <div class="tbl" id="tbl-${esc(t)}" ${k === 0 ? "" : "hidden"}>
       <div class="tbl-head"><b>${esc(t)}</b><span class="g">한 줄 = ${esc(i.grain)}</span></div>
-      ${i.desc ? `<p class="tbl-desc">${esc(i.desc)}</p>` : ""}
+      ${i.desc ? `<p class="tbl-desc">${md(i.desc)}</p>` : ""}
       <div class="tbl-facts">
         <div>행 수<b>${i.rows.toLocaleString("ko-KR")}행</b></div>
         <div>컬럼<b>${i.columns.length}개</b></div>
         <div>기본키<b>${esc((i.primary_key || []).join(" + ") || "-")}</b></div>
         <div>외래키<b>${esc(fk(i))}</b></div>
       </div>
-      ${(i.cautions || []).length ? `<ul>${i.cautions.map(c => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}
+      ${(i.cautions || []).length ? `<ul>${i.cautions.map(c => `<li>${md(c)}</li>`).join("")}</ul>` : ""}
       <div class="res"><table class="cols"><thead><tr><th>컬럼</th><th>형식</th><th>NULL</th><th>설명</th></tr></thead><tbody>${i.columns.map(c =>
-        `<tr><td>${esc(c.name)}</td><td>${esc(c.type)}</td><td>${c.nullable ? "있음" : "-"}</td><td>${esc(c.desc || "")}${c.values ? ` <small>(${c.values.map(esc).join("·")})</small>` : ""}</td></tr>`).join("")}</tbody></table></div>
+        `<tr><td>${esc(c.name)}</td><td>${esc(c.type)}</td><td>${c.nullable ? "있음" : "-"}</td><td>${md(c.desc || "")}${c.values ? ` <small>(${c.values.map(esc).join("·")})</small>` : ""}</td></tr>`).join("")}</tbody></table></div>
       <div class="tbl-actions"><button class="ghost" type="button" data-preview="${esc(t)}">샘플 5행 미리보기</button></div>
       <div class="tbl-out"></div>
     </div>`).join("");
@@ -443,7 +445,7 @@ FROM m LEFT JOIN agg ON agg.ym = m.ym ORDER BY m.ym`;
     const blended = r.spend > 0 ? (r.revenue * 100 / r.spend).toFixed(1) + "%" : "산출 불가";
     $("#dash-foot").innerHTML = `<span>광고비 합 <b>${won(r.spend)}원</b></span><span>귀속 매출 합 <b class="rev">${won(r.revenue)}원</b></span>`
       + `<span class="roas">기본 ROAS(유료) <b class="roas">${roas}</b></span><span>통합 ROAS(참고) <b>${blended}</b></span>`;
-    $("#dash-table").innerHTML = `<table><thead><tr><th>월</th><th>광고비(원)</th><th>귀속 매출(원)</th></tr></thead><tbody>`
+    $("#dash-table").innerHTML = `<table><thead><tr><th>월</th><th class="n">광고비(원)</th><th class="n">귀속 매출(원)</th></tr></thead><tbody>`
       + mo.rows.map(x => `<tr><td>${x.ym}</td><td class="n">${won(x.spend)}</td><td class="n">${won(x.revenue)}</td></tr>`).join("")
       + `<tr><td><b>합계</b></td><td class="n"><b>${won(mo.rows.reduce((a, x) => a + x.spend, 0))}</b></td><td class="n"><b>${won(mo.rows.reduce((a, x) => a + x.revenue, 0))}</b></td></tr></tbody></table>`;
     document.body.dataset.dash = "ready";
@@ -474,6 +476,7 @@ function drawChart(rows) {
   rows.forEach((r, i) => {
     const h = Math.max(0, y(0) - y(toM(r.spend)));
     g += `<rect x="${cx(i) - bw / 2}" y="${y(0) - h}" width="${bw}" height="${h}" rx="3" fill="#b4c5ff"><title>${r.ym} 광고비 ${won(r.spend)}원</title></rect>`
+      + (r.spend > 0 ? `<text x="${cx(i)}" y="${y(0) - h - 4}" text-anchor="middle" font-size="10" font-weight="600" fill="#565e74" font-family="Consolas, monospace">${Math.round(toM(r.spend)).toLocaleString("ko-KR")}</text>` : "")
       + `<text x="${cx(i)}" y="${H - 10}" text-anchor="middle" font-size="11" font-weight="600" fill="#0b1c30">${Number(r.ym.slice(5))}월</text>`;
   });
   const pts = rows.map((r, i) => `${cx(i)},${y(toM(r.revenue))}`).join(" ");

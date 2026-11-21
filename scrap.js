@@ -135,7 +135,7 @@ function pickTable(result, chosen) {
   if (!result.rows.length) return `<p class="fine">결과가 0행이라 고를 숫자가 없습니다. 핵심 결과값은 직접 입력하거나 비워 두세요.</p>`;
   const rows = result.rows.slice(0, 10);
   return `<p class="fine">핵심 결과값 고르기 — 숫자 칸을 누르면 채워집니다 (처음 ${rows.length}행 표시)</p>`
-    + `<div class="res"><table><thead><tr>${result.fields.map(f => `<th>${esc(f)}</th>`).join("")}</tr></thead><tbody>`
+    + `<div class="res"><table><thead><tr>${result.fields.map(f => `<th${typeof rows[0][f] === "number" ? ` class="n"` : ""}>${esc(f)}</th>`).join("")}</tr></thead><tbody>`
     + rows.map((r, i) => `<tr>${result.fields.map(f => typeof r[f] === "number"
       ? `<td class="n"><button type="button" class="sb-cell${chosen && chosen.row === i && chosen.col === f ? " on" : ""}" data-row="${i}" data-col="${esc(f)}">${esc(fmtCell(r[f]))}</button></td>`
       : `<td>${esc(fmtCell(r[f]))}</td>`).join("")}</tr>`).join("") + `</tbody></table></div>`;
@@ -354,7 +354,7 @@ function openDetail(id) {
     <section class="sb-sec"><h5>D. 저장된 결과 테이블 <span class="muted">(${esc(when(x.createdAt))} 실행 당시 스냅샷)</span></h5>
       <div class="res-head"><span>저장된 결과 <b>${r.rowCount.toLocaleString("ko-KR")}행</b> · ${r.fields.length}열</span>
         <span class="ms">${r.truncated ? `전체 ${r.rowCount.toLocaleString("ko-KR")}행 중 처음 ${r.savedRows.toLocaleString("ko-KR")}행 저장` : "전체 저장"}</span></div>
-      ${r.rows.length ? `<div class="res sb-dtable"><table><thead><tr>${r.fields.map(f => `<th>${esc(f)}</th>`).join("")}</tr></thead><tbody>`
+      ${r.rows.length ? `<div class="res sb-dtable"><table><thead><tr>${r.fields.map(f => `<th${typeof r.rows[0][f] === "number" ? ` class="n"` : ""}>${esc(f)}</th>`).join("")}</tr></thead><tbody>`
         + r.rows.map((row, i) => `<tr>${r.fields.map(f => `<td class="${typeof row[f] === "number" ? "n" : ""}${x.metric.cell && x.metric.cell.row === i && x.metric.cell.col === f ? " sb-hit" : ""}">${esc(fmtCell(row[f]))}</td>`).join("")}</tr>`).join("")
         + `</tbody></table></div>` : `<p class="fine">저장 당시 결과가 0행이었습니다. 열: ${r.fields.map(esc).join(", ") || "-"}</p>`}
       <p class="fine">${esc(datasetText(x.dataset))} · 사용 표 ${esc((x.dataset.tables || []).join(", ") || "-")}. 데이터가 바뀌어도 위 숫자는 바뀌지 않습니다.</p>

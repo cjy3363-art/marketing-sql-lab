@@ -136,7 +136,10 @@ UNION ALL SELECT 'marketing_daily', COUNT(*) FROM marketing_daily</textarea>
   <section id="tab-tables" class="view" hidden>
     <div class="card">
       <div class="card-title-row"><span class="card-title">데이터셋 표 보기</span><span class="sub">6개 테이블 · 한 줄이 무엇인지 먼저 봅니다</span></div>
-      <p class="note-plain" id="schema-note"></p>
+      <details class="schema-more">
+        <summary><span class="when-closed">설명 펼쳐 보기</span><span class="when-open">설명 접기</span></summary>
+        <div class="note-plain schema-note" id="schema-note"></div>
+      </details>
     </div>
     <div id="tables"></div>
   </section>
