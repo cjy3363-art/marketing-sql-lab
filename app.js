@@ -160,6 +160,15 @@ function checks(q, res) {
     : `<span class="muted">← 실측결과와 대조</span>`) + `</div>`;
 }
 
+// ── 분석 스크랩북 연결 — 실행에 성공한 결과만 알린다 (scrap.js 가 «결과 스크랩» 버튼을 붙인다). 실행 로직은 그대로 ──
+function resultReady(sql, res, target, source) {
+  const tables = Object.keys(S.schema.tables).filter(t => new RegExp(`\\b${t}\\b`, "i").test(sql));   // ensureTables 와 같은 규칙
+  document.dispatchEvent(new CustomEvent("msl:result", { detail: {
+    sql, fields: res.fields, rows: res.rows, target, source, tables,
+    mine: Object.fromEntries(tables.filter(t => S.mine[t]).map(t => [t, S.mine[t].file])),
+    coverage: S.dash ? [S.dash.months[0], S.dash.months[S.dash.months.length - 1]] : null } }));
+}
+
 // ── 준비한 질문 ───────────────────────────────────────
 const STAGES = ["현황", "비교", "원인 탐색", "처방"];
 // 질문 제목의 «[단계] Q번호.» 머리말은 번호·단계 표시로 따로 보여 주므로 본문에서 뺀다 (questions.json 은 그대로)
@@ -212,7 +221,8 @@ function renderQuestions() {
     const out = b.closest(".q").querySelector(".out");
     b.disabled = true; b.textContent = "실행 중…";
     const t0 = performance.now();
-    try { const res = await run(q.sql); out.innerHTML = render(res, performance.now() - t0) + checks(q, res); out.dataset.done = "1"; }
+    try { const res = await run(q.sql); out.innerHTML = render(res, performance.now() - t0) + checks(q, res); out.dataset.done = "1";
+      resultReady(q.sql, res, out, { kind: "preset", id: q.id, no: q.no, title: titleOf(q), unit: q.unit, denominator: q.denominator }); }
     catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
     b.disabled = false; b.textContent = "SQL 실행";
   }));
@@ -227,7 +237,8 @@ $("#btn-run").addEventListener("click", async () => {
   const b = $("#btn-run");
   b.disabled = true; b.textContent = "실행 중…";
   const t0 = performance.now();
-  try { $("#ask-out").innerHTML = render(await run($("#sql").value), performance.now() - t0); }
+  const sql = $("#sql").value;
+  try { const res = await run(sql); $("#ask-out").innerHTML = render(res, performance.now() - t0); resultReady(sql, res, $("#ask-out"), { kind: "ask" }); }
   catch (e) { $("#ask-out").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   b.disabled = false; b.textContent = "SQL 실행";
 });
@@ -344,7 +355,7 @@ function renderTables() {
 }
 
 // ── 탭 — 대시보드 탭은 대시보드 아래에 준비한 질문을 함께 보여 준다 (시안 design01) ──
-const VIEWS = { dashboard: ["dashboard", "preset"], preset: ["preset"], ask: ["ask"], tables: ["tables"], mine: ["mine"] };
+const VIEWS = { dashboard: ["dashboard", "preset"], preset: ["preset"], ask: ["ask"], tables: ["tables"], mine: ["mine"], scrap: ["scrap"] };
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
   const show = VIEWS[b.dataset.tab] || [b.dataset.tab];

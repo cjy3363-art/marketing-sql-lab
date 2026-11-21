@@ -25,6 +25,7 @@
       <button role="tab" data-tab="ask" aria-selected="false">직접 묻기</button>
       <button role="tab" data-tab="tables" aria-selected="false">표 보기</button>
       <button role="tab" data-tab="mine" aria-selected="false">내 파일로</button>
+      <button role="tab" data-tab="scrap" aria-selected="false">분석 스크랩북</button>
     </nav>
   </div>
 </header>
@@ -159,6 +160,83 @@ UNION ALL SELECT 'marketing_daily', COUNT(*) FROM marketing_daily</textarea>
       «문장으로 묻기»를 눌러도 AI에게는 질문 문장과 «표 보기»의 표 설명만 갑니다. 내 파일의 내용은 가지 않습니다.</div>
   </section>
 
+  <!-- 분석 스크랩북 — 실행 결과 스냅샷을 이 브라우저(IndexedDB)에 보관 -->
+  <section id="tab-scrap" class="view" hidden>
+    <div class="section-head">
+      <div>
+        <h2>분석 스크랩북 <span class="sb-count" id="sb-count">0건</span></h2>
+        <p class="sub">중요한 SQL 분석 결과를 저장하고 보고에 활용하세요.</p>
+      </div>
+      <div class="sb-backup">
+        <button type="button" class="btn-icon" id="sb-export">JSON 내보내기</button>
+        <label class="btn-icon" for="sb-import-file">JSON 가져오기</label>
+        <input type="file" id="sb-import-file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div class="segmented" id="sb-cats" role="tablist" aria-label="스크랩 카테고리"></div>
+    <div class="card sb-tools">
+      <input type="search" id="sb-search" placeholder="제목·메모 검색" aria-label="제목·메모 검색">
+      <label class="field sb-sort"><span>정렬</span>
+        <select id="sb-sort"><option value="new">최신순</option><option value="old">오래된순</option><option value="title">제목순</option></select></label>
+      <label class="sb-fav-only"><input type="checkbox" id="sb-fav-only"> 즐겨찾기만</label>
+    </div>
+    <p class="note" id="sb-store-msg" hidden></p>
+    <div id="sb-list" class="sb-list"></div>
+    <p class="fine">스크랩은 <b>이 브라우저(IndexedDB)에만</b> 저장됩니다. 다른 기기·브라우저에서는 보이지 않고, 브라우저 데이터를 지우면 함께 사라집니다.
+      중요한 스크랩은 «JSON 내보내기»로 백업하세요. 저장된 숫자는 저장 당시의 결과(스냅샷)이며 데이터가 바뀌어도 자동으로 바뀌지 않습니다.</p>
+  </section>
+
+  <!-- 스크랩 저장·수정 -->
+  <dialog id="sb-form" class="sb-dialog" aria-labelledby="sb-form-title">
+    <form method="dialog" id="sb-form-el" novalidate>
+      <div class="sb-dhead"><h3 id="sb-form-title">결과 스크랩</h3><button type="button" class="btn-icon" data-close>닫기</button></div>
+      <div class="sb-dbody">
+        <p class="note" id="sb-form-warn" hidden></p>
+        <label class="label" for="sb-f-title">분석 제목 <em class="req">필수</em></label>
+        <input id="sb-f-title" maxlength="120" autocomplete="off">
+        <label class="label" for="sb-f-cat">카테고리 <em class="req">필수</em></label>
+        <select id="sb-f-cat" class="sb-select"></select>
+        <div class="sb-grid2">
+          <div><label class="label" for="sb-f-metric">핵심 지표명</label><input id="sb-f-metric" maxlength="60" placeholder="예) 광고비 합계"></div>
+          <div><label class="label" for="sb-f-value">핵심 결과값</label><input id="sb-f-value" maxlength="60" placeholder="아래 표에서 숫자를 누르거나 직접 입력"></div>
+        </div>
+        <div id="sb-f-pick" class="sb-pick"></div>
+        <div class="sb-grid2">
+          <div><label class="label" for="sb-f-target">병원명 또는 분석 대상</label><input id="sb-f-target" maxlength="80"></div>
+          <div><label class="label" for="sb-f-period">분석 기간</label><input id="sb-f-period" maxlength="60" placeholder="직접 입력 (SQL에서 추측하지 않습니다)"></div>
+        </div>
+        <label class="label" for="sb-f-basis">계산 기준·분모</label>
+        <input id="sb-f-basis" maxlength="200" placeholder="확인된 경우에만">
+        <label class="label" for="sb-f-memo">보고용 메모 — 분석 결과의 의미</label>
+        <textarea id="sb-f-memo" rows="2" maxlength="1000"></textarea>
+        <label class="label" for="sb-f-emph">보고 시 강조할 내용</label>
+        <textarea id="sb-f-emph" rows="2" maxlength="1000"></textarea>
+        <label class="label" for="sb-f-follow">추가 확인이 필요한 사항</label>
+        <textarea id="sb-f-follow" rows="2" maxlength="1000"></textarea>
+        <label class="label" for="sb-f-tags">태그 <span class="muted">(쉼표로 구분)</span></label>
+        <input id="sb-f-tags" maxlength="200" placeholder="예) 6월, 유료광고">
+        <p class="fine" id="sb-f-auto"></p>
+        <p class="err" id="sb-form-err" hidden></p>
+      </div>
+      <div class="sb-dfoot"><button type="button" class="ghost" data-close>취소</button><button type="submit" class="primary" id="sb-f-save">저장</button></div>
+    </form>
+  </dialog>
+
+  <!-- 스크랩 상세 -->
+  <dialog id="sb-detail" class="sb-dialog wide" aria-labelledby="sb-d-title">
+    <div class="sb-dhead"><h3 id="sb-d-title">스크랩 상세</h3><button type="button" class="btn-icon" data-close>닫기</button></div>
+    <div class="sb-dbody" id="sb-d-body"></div>
+  </dialog>
+
+  <!-- JSON 가져오기 확인 -->
+  <dialog id="sb-import" class="sb-dialog" aria-labelledby="sb-i-title">
+    <div class="sb-dhead"><h3 id="sb-i-title">JSON 가져오기</h3><button type="button" class="btn-icon" data-close>닫기</button></div>
+    <div class="sb-dbody" id="sb-i-body"></div>
+    <div class="sb-dfoot"><button type="button" class="ghost" data-close>취소</button><button type="button" class="primary" id="sb-i-go">가져오기</button></div>
+  </dialog>
+
+  <div id="sb-toast" class="sb-toast" role="status" aria-live="polite" hidden></div>
+
   <footer class="fineprint">
     데이터는 전부 만들어낸 것입니다(병원명 «(가상)»). 데이터베이스(DuckDB)는 <b>이 브라우저 안</b>에서 돕니다.
     AI에게는 질문 문장과 표 설명만 보냅니다 — 데이터는 보내지 않습니다.
@@ -166,5 +244,6 @@ UNION ALL SELECT 'marketing_daily', COUNT(*) FROM marketing_daily</textarea>
 </main>
 <script src="lib/xlsx.full.min.js"></script>
 <script type="module" src="app.js"></script>
+<script type="module" src="scrap.js"></script>
 </body>
 </html>
