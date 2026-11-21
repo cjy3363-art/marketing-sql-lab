@@ -10,6 +10,7 @@
 !/downloads
 /downloads/*
 !/downloads/*.xlsx
+!/downloads/marketing-sql-lab-sample-data.zip
 !/img
 /img/*
 !/img/logo-mark.png
